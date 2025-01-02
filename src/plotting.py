@@ -113,5 +113,8 @@ def performance_by_time(reference, analysis, width=800, height=400, fig_type=Non
         height=height,
     )
 
+    fig.update_layout(hovermode="x")
+    fig.update_traces(hovertemplate="%{y}")
+
     # Display the plot
     return fig.show(fig_type)
