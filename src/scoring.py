@@ -109,7 +109,7 @@ def reference_metrics_by_period(
     target_col,
     prediction_col,
     score_method,
-    statistic,
+    statistic=np.mean,
     confidence_level=0.997,
     n_resamples=1000,
     random_state=42,
@@ -160,12 +160,11 @@ def reference_metrics_by_period(
     - The thresholds (lower and upper) are based on a 3-sigma rule assuming normal distribution.
 
     """
-    # Calcular as métricas agrupadas por período
+
     metrics_by_period = metric_by_time_period(
         df, period, target_col, prediction_col, score_method
     )
 
-    # Calcular o intervalo de confiança usando bootstrapping
     ci_lower, ci_upper = bootstrapping_bca(
         metrics_by_period["metric"],
         confidence_level,
@@ -174,17 +173,11 @@ def reference_metrics_by_period(
         random_state,
     )
 
-    # Calcular a média estimada da métrica
     estimated_mean_statistic = np.mean(metrics_by_period["metric"])
-
-    # Calcular o desvio padrão
     std_deviation = metrics_by_period["metric"].std()
-
-    # Calcular os limiares
-    upper_threshold = estimated_mean_statistic + (std_deviation * 3)
     lower_threshold = estimated_mean_statistic - (std_deviation * 3)
+    upper_threshold = estimated_mean_statistic + (std_deviation * 3)
 
-    # Criar o dicionário de resultados
     results = {
         "ci_lower": ci_lower,
         "ci_upper": ci_upper,
