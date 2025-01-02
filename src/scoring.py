@@ -26,9 +26,9 @@ def metric_by_time_period(df, period, target_col, prediction_col, metric=f1_scor
 
 def bootstrapping_bca(
     data,
-    confidence_level=0.977,
+    confidence_level=0.997,
     statistic=np.mean,
-    num_iterations=1000,
+    n_resamples=1000,
     random_state=42,
 ):
     """
@@ -38,30 +38,23 @@ def bootstrapping_bca(
     - data (list or numpy array): Sample data.
     - confidence_level (float): Desired confidence level (e.g., 0.95 for 95%).
     - statistic (function): Statistical function to apply to the data. Default is np.mean.
-    - num_iterations (int): Number of bootstrap resamples to perform. Default is 1000.
+    - n_resamples (int): Number of bootstrap resamples to perform. Default is 1000.
+    - random_state (int): Random seed for reproducibility.
 
     Returns:
     - tuple: A tuple containing the lower and upper bounds of the BCa confidence interval.
     """
     np.random.seed(random_state)
+    data = np.asarray(data)
     n = len(data)
 
     def generate_acceleration(data):
         """
-        Calculates the jackknife resampling and returns the acceleration.
-
-        Parameters:
-        - data (list or numpy array): Sample data.
-
-        Returns:
-        - float: Acceleration value calculated from jackknife samples.
+        Calculates the acceleration parameter using jackknife resampling.
         """
         jackknife = np.zeros(n)
-
         for i in range(n):
-            jackknife_sample = np.concatenate(
-                [data[:i], data[i + 1 :]]
-            )  # Remove o elemento na posição i
+            jackknife_sample = np.delete(data, i)
             jackknife[i] = statistic(jackknife_sample)
 
         jackknife_mean = np.mean(jackknife)
@@ -69,50 +62,43 @@ def bootstrapping_bca(
         acceleration = np.sum(jackknife_diffs**3) / (
             6.0 * (np.sum(jackknife_diffs**2) ** 1.5)
         )
-
         return acceleration
 
-    def calculate_bootstrap_statistics(data, statistic, num_iterations):
+    def calculate_bootstrap_statistics(data, statistic, n_resamples):
         """
-        Performs bootstrap resampling on the given data and calculates the specified statistic for each resample.
-
-        Parameters:
-        - data (list or numpy array): Sample data.
-        - statistic (function): Statistical function to apply to the data.
-        - num_iterations (int): Number of bootstrap resamples to perform. Default is 1000.
-
-        Returns:
-        - numpy array: Array of calculated statistics for each bootstrap resample.
+        Performs bootstrap resampling and calculates the specified statistic.
         """
-        sample_statistics = np.zeros(num_iterations)
-
-        for i in range(num_iterations):
-            resample = np.random.choice(data, size=n, replace=True)
-            sample_statistics[i] = statistic(resample)
-
-        return sample_statistics
+        return np.array(
+            [
+                statistic(np.random.choice(data, size=n, replace=True))
+                for _ in range(n_resamples)
+            ]
+        )
 
     # Bootstrap resampling
-    sample_statistics = calculate_bootstrap_statistics(data, statistic, num_iterations)
+    sample_statistics = calculate_bootstrap_statistics(data, statistic, n_resamples)
 
-    # Jackknife resampling
+    # Jackknife resampling for acceleration
     acceleration = generate_acceleration(data)
 
     # Bias correction
     observed_stat = statistic(data)
-    bias = np.sum(sample_statistics < observed_stat) / num_iterations
+    bias = np.mean(sample_statistics < observed_stat)
     z0 = norm.ppf(bias)
 
     # Adjusting percentiles
     alpha = 1 - confidence_level
     z_alpha = norm.ppf(1 - alpha / 2)
 
-    z_lower_bound = norm.cdf((z0 - z_alpha / (1 - acceleration * (z0 - z_alpha))) + z0)
-    z_upper_bound = norm.cdf((z0 + z_alpha / (1 + acceleration * (z0 + z_alpha))) + z0)
+    z_lower_bound = (z0 - z_alpha) / (1 - acceleration * (z0 - z_alpha)) + z0
+    z_upper_bound = (z0 + z_alpha) / (1 - acceleration * (z0 + z_alpha)) + z0
+
+    alpha_lower = norm.cdf(z_lower_bound)
+    alpha_upper = norm.cdf(z_upper_bound)
 
     # Calculate lower and upper bounds from the percentiles
-    lower_bound = np.quantile(sample_statistics, z_lower_bound)
-    upper_bound = np.quantile(sample_statistics, z_upper_bound)
+    lower_bound = np.quantile(sample_statistics, alpha_lower)
+    upper_bound = np.quantile(sample_statistics, alpha_upper)
 
     return lower_bound, upper_bound
 
