@@ -24,7 +24,13 @@ def metric_by_time_period(df, period, target_col, prediction_col, metric=f1_scor
     return grouped.reset_index(name="metric")
 
 
-def bootstrapping_bca(data, confidence_level, statistic=np.mean, num_iterations=1000):
+def bootstrapping_bca(
+    data,
+    confidence_level=0.977,
+    statistic=np.mean,
+    num_iterations=1000,
+    random_state=42,
+):
     """
     Calculates the bias-corrected and accelerated (BCa) bootstrap confidence interval for the given data.
 
@@ -37,7 +43,7 @@ def bootstrapping_bca(data, confidence_level, statistic=np.mean, num_iterations=
     Returns:
     - tuple: A tuple containing the lower and upper bounds of the BCa confidence interval.
     """
-    np.random.seed(42)
+    np.random.seed(random_state)
     n = len(data)
 
     def generate_acceleration(data):
@@ -98,17 +104,15 @@ def bootstrapping_bca(data, confidence_level, statistic=np.mean, num_iterations=
     z0 = norm.ppf(bias)
 
     # Adjusting percentiles
-    z_alpha = norm.ppf((1 + confidence_level) / 2)
-    lower_bound_percentile = norm.cdf(
-        z0 + (z0 - z_alpha) / (1 - acceleration * (z0 - z_alpha))
-    )
-    upper_bound_percentile = norm.cdf(
-        z0 + (z0 + z_alpha) / (1 + acceleration * (z0 + z_alpha))
-    )
+    alpha = 1 - confidence_level
+    z_alpha = norm.ppf(1 - alpha / 2)
+
+    z_lower_bound = norm.cdf((z0 - z_alpha / (1 - acceleration * (z0 - z_alpha))) + z0)
+    z_upper_bound = norm.cdf((z0 + z_alpha / (1 + acceleration * (z0 + z_alpha))) + z0)
 
     # Calculate lower and upper bounds from the percentiles
-    lower_bound = np.quantile(sample_statistics, lower_bound_percentile)
-    upper_bound = np.quantile(sample_statistics, upper_bound_percentile)
+    lower_bound = np.quantile(sample_statistics, z_lower_bound)
+    upper_bound = np.quantile(sample_statistics, z_upper_bound)
 
     return lower_bound, upper_bound
 
