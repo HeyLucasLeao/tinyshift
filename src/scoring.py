@@ -104,30 +104,74 @@ def bootstrapping_bca(
 
 
 def reference_metrics_by_period(
-    df, period, target_col, prediction_col, statistic, confidence_level=0.997
+    df,
+    period,
+    target_col,
+    prediction_col,
+    score_method,
+    statistic,
+    confidence_level=0.997,
+    n_resamples=1000,
+    random_state=42,
 ):
     """
-    Calculate reference metrics for a DataFrame grouped by a specified time period, and return confidence intervals and thresholds.
+    Calculate reference metrics for a DataFrame grouped by a specified
+    time period, including confidence intervals and thresholds.
 
     Parameters:
-    - df (pd.DataFrame): DataFrame containing the data.
-    - period (str): Time period for grouping (e.g., 'W' for weeks).
-    - target_col (str): Column name for the true labels.
-    - prediction_col (str): Column name for the predicted values.
-    - statistic (function): Statistical function to compute the metric.
-    - confidence_level (float): Confidence level for the confidence interval. Default is 0.997.
+    ----------
+    - df : pd.DataFrame
+        The input DataFrame containing the data.
+    - period : str
+        The time period for grouping (e.g., 'W' for weeks, 'M' for months).
+    - target_col : str
+        The column name containing the true labels or observed values.
+    - prediction_col : str
+        The column name containing the predicted values.
+    - score_method : function
+        The metric function to evaluate the model's performance (e.g., mean squared error, accuracy score).
+    - statistic : function
+        The statistical function to apply to the metrics (e.g., np.mean, np.median).
+    - confidence_level : float, optional (default=0.997)
+        The confidence level for the bootstrapped confidence interval (e.g., 0.95 for 95% confidence level).
+    - n_resamples : int, optional (default=1000)
+        The number of bootstrap resamples to perform for confidence interval calculation.
+    - random_state : int, optional (default=42)
+        Random seed for reproducibility.
 
     Returns:
-    - dict: Dictionary containing the confidence interval, mean, and upper and lower thresholds of the calculated metric.
+    -------
+    - dict
+        A dictionary containing the following keys:
+        - "ci_lower" : float
+            The lower bound of the bias-corrected and accelerated (BCa) bootstrap confidence interval.
+        - "ci_upper" : float
+            The upper bound of the BCa bootstrap confidence interval.
+        - "mean" : float
+            The mean of the calculated metric across the specified period.
+        - "lower_threshold" : float
+            The lower threshold for anomaly detection, calculated as mean - 3 * standard deviation.
+        - "upper_threshold" : float
+            The upper threshold for anomaly detection, calculated as mean + 3 * standard deviation.
+
+    Notes:
+    ------
+    - The confidence interval is calculated using the BCa two-sided bootstrap method.
+    - The thresholds (lower and upper) are based on a 3-sigma rule assuming normal distribution.
+
     """
     # Calcular as métricas agrupadas por período
     metrics_by_period = metric_by_time_period(
-        df, period, target_col, prediction_col, statistic
+        df, period, target_col, prediction_col, score_method
     )
 
     # Calcular o intervalo de confiança usando bootstrapping
     ci_lower, ci_upper = bootstrapping_bca(
-        metrics_by_period["metric"], confidence_level=confidence_level
+        metrics_by_period["metric"],
+        confidence_level,
+        statistic,
+        n_resamples,
+        random_state,
     )
 
     # Calcular a média estimada da métrica
