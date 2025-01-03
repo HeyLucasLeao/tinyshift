@@ -108,7 +108,7 @@ def reference_metrics_by_period(
     period,
     target_col,
     prediction_col,
-    score_method,
+    score_method=f1_score,
     statistic=np.mean,
     confidence_level=0.997,
     n_resamples=1000,
