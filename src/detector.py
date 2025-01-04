@@ -55,16 +55,20 @@ class CategoricalDriftDetector:
         """
         Compute the L-infinity distance between two distributions.
         """
-        q = p.shift()
-        return np.max(np.abs(p - q), axis=1).rename("metric")
+        idx = p.index[:-1]
+        p = np.asarray(p)
+        return pd.Series(
+            np.max(np.abs(p[1:] - p[:-1]), axis=1), index=idx, name="metric"
+        )
 
     def jensenshannon_distance(self, p):
         """
         Compute the Jensen-Shannon distance between two distributions.
         """
-        q = p.shift()
-        js = jensenshannon(p, q, axis=1)
-        return pd.Series(js, index=p.index, name="metric")
+        idx = p.index[:-1]
+        p = np.asarray(p)
+        js = jensenshannon(p[1:], p[:-1], axis=1)
+        return pd.Series(js, index=idx, name="metric")
 
     def generate_distance(self, p):
         """
