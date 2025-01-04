@@ -4,7 +4,9 @@ from sklearn.metrics import f1_score
 import pandas as pd
 
 
-def metric_by_time_period(df, period, target_col, prediction_col, metric=f1_score):
+def metric_by_time_period(
+    df, target_col, prediction_col, timestamp_col, period, metric=f1_score
+):
     """
     Calculate a specified metric for each time period in the DataFrame.
 
@@ -18,7 +20,7 @@ def metric_by_time_period(df, period, target_col, prediction_col, metric=f1_scor
     Returns:
     - pandas DataFrame: A DataFrame with the metric calculated for each time period.
     """
-    grouped = df.groupby(pd.Grouper(key="datetime", freq=period)).apply(
+    grouped = df.groupby(pd.Grouper(key=timestamp_col, freq=period)).apply(
         lambda x: metric(x[target_col], x[prediction_col])
     )
     return grouped.reset_index(name="metric")
@@ -187,3 +189,11 @@ def reference_metrics_by_period(
     }
 
     return results
+
+
+def deviation_threshold(df):
+    std_deviation = df["metric"].std()
+    estimated_mean = df["metric"].mean()
+    threshold_lower = estimated_mean - (3 * std_deviation)
+    threshold_upper = estimated_mean + (3 * std_deviation)
+    return threshold_lower, threshold_upper
