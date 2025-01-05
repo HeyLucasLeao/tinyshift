@@ -18,6 +18,7 @@ class PerformanceTracker:
         confidence_level=0.997,
         n_resamples=1000,
         random_state=42,
+        thresholds=(),
     ):
 
         # Initialize distributions and statistics
@@ -37,6 +38,9 @@ class PerformanceTracker:
             random_state=random_state,
         )
         self.plot = plot.Plot(self.statistics, self.reference_distribution)
+        scoring.check_thresholds(
+            self.statistics, self.reference_distribution, thresholds
+        )
 
     def _calculate_metric(
         self,

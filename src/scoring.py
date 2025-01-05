@@ -94,7 +94,6 @@ def calculate_statistics(
     confidence_level,
     statistic,
     n_resamples,
-    threshold_func=deviation_threshold,
     random_state=42,
 ):
     """
@@ -108,14 +107,20 @@ def calculate_statistics(
         random_state,
     )
 
-    threshold_lower, threshold_upper = threshold_func(df)
-
     estimated_mean = np.mean(df["metric"])
 
     return {
         "ci_lower": ci_lower,
         "ci_upper": ci_upper,
         "mean": estimated_mean,
-        "lower_threshold": threshold_lower,
-        "upper_threshold": threshold_upper,
     }
+
+
+def check_thresholds(statistics, distribution, thresholds):
+    if thresholds == ():
+        lower_threshold, upper_threshold = deviation_threshold(distribution)
+    else:
+        lower_threshold, upper_threshold = thresholds
+
+    statistics["lower_threshold"] = lower_threshold
+    statistics["upper_threshold"] = upper_threshold

@@ -25,6 +25,7 @@ class CategoricalDriftDetector:
         confidence_level=0.997,
         n_resamples=1000,
         random_state=42,
+        thresholds=(),
     ):
 
         # Initialize frequency and statistics
@@ -48,6 +49,7 @@ class CategoricalDriftDetector:
             random_state=random_state,
         )
         self.plot = plot.Plot(self.statistics, self.reference_distance)
+        scoring.check_thresholds(self.statistics, self.reference_distance, thresholds)
 
     def _calculate_frequency(
         self,
@@ -108,6 +110,7 @@ class ContinuousDriftDetector:
         confidence_level=0.997,
         n_resamples=1000,
         random_state=42,
+        thresholds=(),
     ):
 
         # Initialize frequency and statistics
@@ -130,6 +133,7 @@ class ContinuousDriftDetector:
             random_state=random_state,
         )
         self.plot = plot.Plot(self.statistics, self.reference_ks)
+        scoring.check_thresholds(self.statistics, self.reference_ks, thresholds)
 
     def _calculate_distribution(self, df, column_name, timestamp, period):
         """
