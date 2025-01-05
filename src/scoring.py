@@ -197,3 +197,35 @@ def deviation_threshold(df):
     threshold_lower = estimated_mean - (3 * std_deviation)
     threshold_upper = estimated_mean + (3 * std_deviation)
     return threshold_lower, threshold_upper
+
+
+def calculate_statistics(
+    df,
+    confidence_level,
+    statistic,
+    n_resamples,
+    threshold_func=deviation_threshold,
+    random_state=42,
+):
+    """
+    Calculate statistics for the reference distances, including confidence intervals and thresholds.
+    """
+    ci_lower, ci_upper = bootstrapping_bca(
+        df["metric"],
+        confidence_level,
+        statistic,
+        n_resamples,
+        random_state,
+    )
+
+    threshold_lower, threshold_upper = threshold_func(df)
+
+    estimated_mean = np.mean(df["metric"])
+
+    return {
+        "ci_lower": ci_lower,
+        "ci_upper": ci_upper,
+        "mean": estimated_mean,
+        "lower_threshold": threshold_lower,
+        "upper_threshold": threshold_upper,
+    }
