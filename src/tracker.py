@@ -1,6 +1,7 @@
 import numpy as np
 from src import scoring
 from sklearn.metrics import f1_score
+import pandas as pd
 
 
 class PerformanceTracker:
@@ -17,17 +18,9 @@ class PerformanceTracker:
         n_resamples=1000,
         random_state=42,
     ):
-        self.column_col = target_col
-        self.prediction_col = prediction_col
-        self.timestamp_col = timestamp_col
-        self.period = period
-        self.statistic = statistic
-        self.confidence_level = confidence_level
-        self.n_resamples = n_resamples
-        self.random_state = random_state
 
         # Initialize distributions and statistics
-        self.reference_distribution = scoring.metric_by_time_period(
+        self.reference_distribution = self._calculate_metric(
             reference_data,
             target_col,
             prediction_col,
@@ -35,30 +28,37 @@ class PerformanceTracker:
             period,
             metric_score,
         )
-        self.statistics = self._calculate_statistics()
-
-    def _calculate_statistics(self):
-        """
-        Calculate statistics for the reference distances, including confidence intervals and thresholds.
-        """
-        ci_lower, ci_upper = scoring.bootstrapping_bca(
-            self.reference_distribution["metric"],
-            self.confidence_level,
-            self.statistic,
-            self.n_resamples,
-            self.random_state,
+        self.statistics = scoring.calculate_statistics(
+            self.reference_distribution,
+            confidence_level,
+            statistic,
+            n_resamples=n_resamples,
+            random_state=random_state,
         )
 
-        threshold_lower, threshold_upper = scoring.deviation_threshold(
-            self.reference_distribution
+    def _calculate_metric(
+        self,
+        df,
+        target_col,
+        prediction_col,
+        timestamp_col,
+        period,
+        metric,
+    ):
+        """
+        Calculate a specified metric for each time period in the DataFrame.
+
+        Parameters:
+        - df: pandas DataFrame containing the data.
+        - period: The time period for grouping data (e.g., 'W' for weeks, 'M' for months).
+        - target_col: The name of the column containing the actual target values.
+        - prediction_col: The name of the column containing the predicted values.
+        - metric: A function to compute the metric (e.g., f1_score).
+
+        Returns:
+        - pandas DataFrame: A DataFrame with the metric calculated for each time period.
+        """
+        grouped = df.groupby(pd.Grouper(key=timestamp_col, freq=period)).apply(
+            lambda x: metric(x[target_col], x[prediction_col])
         )
-
-        estimated_mean = np.mean(self.reference_distribution["metric"])
-
-        return {
-            "ci_lower": ci_lower,
-            "ci_upper": ci_upper,
-            "mean": estimated_mean,
-            "lower_threshold": threshold_lower,
-            "upper_threshold": threshold_upper,
-        }
+        return grouped.reset_index(name="metric")
