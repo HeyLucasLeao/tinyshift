@@ -1,11 +1,10 @@
 import numpy as np
-from . import plot
-from src import scoring
 from sklearn.metrics import f1_score
 import pandas as pd
+from .base import BaseModel
 
 
-class PerformanceTracker:
+class PerformanceTracker(BaseModel):
     def __init__(
         self,
         reference_data,
@@ -80,16 +79,13 @@ class PerformanceTracker:
             prediction_col,
             datetime_col,
         )
-        self.statistics = scoring.calculate_statistics(
+        super().__init__(
             self.reference_distribution,
             confidence_level,
             statistic,
-            n_resamples=n_resamples,
-            random_state=random_state,
-        )
-        self.plot = plot.Plot(self.statistics, self.reference_distribution)
-        scoring.generate_drift_limit(
-            self.statistics, self.reference_distribution, drift_limit
+            n_resamples,
+            random_state,
+            drift_limit,
         )
 
     def _calculate_metric(

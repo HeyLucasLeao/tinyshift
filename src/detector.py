@@ -1,9 +1,8 @@
 import numpy as np
 import pandas as pd
-from src import scoring
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import ks_2samp
-from . import plot
+from .base import BaseModel
 
 
 def l_infinity(a, b):
@@ -13,7 +12,7 @@ def l_infinity(a, b):
     return np.max(np.abs(a - b))
 
 
-class CategoricalDriftDetector:
+class CategoricalDriftDetector(BaseModel):
     def __init__(
         self,
         reference_data,
@@ -86,21 +85,18 @@ class CategoricalDriftDetector:
             period,
         )
 
-        self.reference_distance = self._generate_distance(
+        self.reference_distribution = self._generate_distance(
             self.reference_frequency,
             distance_func,
         )
 
-        self.statistics = scoring.calculate_statistics(
-            self.reference_distance,
+        super().__init__(
+            self.reference_distribution,
             confidence_level,
             statistic,
-            n_resamples=n_resamples,
-            random_state=random_state,
-        )
-        self.plot = plot.Plot(self.statistics, self.reference_distance)
-        scoring.generate_drift_limit(
-            self.statistics, self.reference_distance, drift_limit
+            n_resamples,
+            random_state,
+            drift_limit,
         )
 
     def _calculate_frequency(
@@ -205,7 +201,7 @@ class CategoricalDriftDetector:
         return metrics
 
 
-class ContinuousDriftDetector:
+class ContinuousDriftDetector(BaseModel):
     def __init__(
         self,
         reference_data,
@@ -275,15 +271,14 @@ class ContinuousDriftDetector:
             self.reference_distribution,
         )
 
-        self.statistics = scoring.calculate_statistics(
+        super().__init__(
             self.reference_ks,
             confidence_level,
             statistic,
-            n_resamples=n_resamples,
-            random_state=random_state,
+            n_resamples,
+            random_state,
+            drift_limit,
         )
-        self.plot = plot.Plot(self.statistics, self.reference_ks)
-        scoring.generate_drift_limit(self.statistics, self.reference_ks, drift_limit)
 
     def _calculate_distribution(self, df, column_name, timestamp, period):
         """
