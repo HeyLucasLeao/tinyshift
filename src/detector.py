@@ -4,6 +4,13 @@ from src import scoring
 from scipy.spatial.distance import jensenshannon
 
 
+def l_infinity(a, b):
+    """
+    Compute the L-infinity distance between two distributions.
+    """
+    return np.max(np.abs(a - b))
+
+
 class CategoricalDriftDetector:
     def __init__(
         self,
@@ -27,20 +34,20 @@ class CategoricalDriftDetector:
         self.n_resamples = n_resamples
         self.random_state = random_state
 
-        # Initialize distributions and statistics
-        self.reference_distribution = self._calculate_distribution(
+        # Initialize frequency and statistics
+        self.reference_frequency = self._calculate_frequency(
             reference_data, period, column_timestamp
         )
-        self.reference_distance = self.generate_distance(self.reference_distribution)
+        self.reference_distance = self.generate_distance(self.reference_frequency)
         self.statistics = self._calculate_statistics()
 
-    def _calculate_distribution(self, df, period, column_timestamp):
+    def _calculate_frequency(self, df, period, column_timestamp):
         """
-        Calculate the reference distribution by grouping data based on the specified period.
+        Calculate the reference frequency by grouping data based on the specified period.
         """
         grouped = (
             df.groupby(pd.Grouper(key=column_timestamp, freq=period))
-            .apply(lambda x: x[self.column_name].value_counts(normalize=True))
+            .apply(lambda x: x[self.column_name].value_counts())
             .rename("metric")
             .reset_index()
             .rename(columns={"level_1": self.column_name})
@@ -51,37 +58,30 @@ class CategoricalDriftDetector:
         )
         return grouped
 
-    def l_infinity_distance(self, p):
-        """
-        Compute the L-infinity distance between two distributions.
-        """
-        idx = p.index[:-1]
-        p = np.asarray(p)
-        return pd.Series(
-            np.max(np.abs(p[1:] - p[:-1]), axis=1), index=idx, name="metric"
-        )
-
-    def jensenshannon_distance(self, p):
-        """
-        Compute the Jensen-Shannon distance between two distributions.
-        """
-        idx = p.index[:-1]
-        p = np.asarray(p)
-        js = jensenshannon(p[1:], p[:-1], axis=1)
-        return pd.Series(js, index=idx, name="metric")
-
     def generate_distance(self, p):
         """
         Generate the distance metric based on the specified distance function.
         """
+        n = p.shape[0]
+        p_values = np.zeros(n)
+        past_value = np.zeros(p.shape[1], dtype=np.int32)
+        index = p.index[1:]
+        p = np.asarray(p)
+
         if self.distance_function == "l_infinity":
-            distance = self.l_infinity_distance(p)
+            func = l_infinity
         elif self.distance_function == "jensenshannon":
-            distance = self.jensenshannon_distance(p)
+            func = jensenshannon
         else:
             raise ValueError(f"Unsupported distance function: {self.distance_function}")
 
-        return distance.reset_index().loc[1:]
+        for i in range(1, n):
+            past_value = past_value + p[i - 1] / np.sum(past_value)
+            current_value = p[i] / np.sum(p[i])
+            p_value = func(past_value, current_value)
+            p_values[i] = p_value
+
+        return pd.DataFrame({"datetime": index, "metric": p_values[1:]})
 
     def _calculate_statistics(self):
         """
