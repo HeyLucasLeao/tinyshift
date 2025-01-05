@@ -88,23 +88,23 @@ class Plot:
             opacity=0.5,
         )
 
-        lower_threshold, upper_threshold = self.statistics.get(
-            "lower_threshold"
-        ), self.statistics.get("upper_threshold")
-        if lower_threshold:
+        lower_limit, upper_limit = self.statistics.get(
+            "lower_limit"
+        ), self.statistics.get("upper_limit")
+        if lower_limit:
             fig.add_hline(
-                y=self.statistics.get("lower_threshold"),
+                y=self.statistics.get("lower_limit"),
                 line_dash="dash",
                 line_color="firebrick",
-                name="Lower Threshold",
+                name="Lower Limit",
                 opacity=0.5,
             )
-        if upper_threshold:
+        if upper_limit:
             fig.add_hline(
-                y=self.statistics.get("upper_threshold"),
+                y=self.statistics.get("upper_limit"),
                 line_dash="dash",
                 line_color="firebrick",
-                name="Upper Threshold",
+                name="Upper Limit",
                 opacity=0.5,
             )
 

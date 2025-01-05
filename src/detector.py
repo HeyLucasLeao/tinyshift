@@ -25,12 +25,12 @@ class CategoricalDriftDetector:
         confidence_level=0.997,
         n_resamples=1000,
         random_state=42,
-        thresholds=(),
+        drift_limit="deviation",
     ):
         """
         A detector for identifying drift in categorical data over time. The detector uses
         a reference dataset to compute a baseline distribution and compare subsequent data
-        for deviations based on a distance metric and statistical thresholds.
+        for deviations based on a distance metric and drift limits.
 
         Parameters:
         ----------
@@ -57,9 +57,9 @@ class CategoricalDriftDetector:
         random_state : int, optional
             Seed for reproducibility of random resampling.
             Default is 42.
-        thresholds : tuple, optional
+        drift_limit : tuple, optional
             User-defined thresholds for drift detection.
-            Default is an empty tuple.
+            Default is the 'deviation method'.
 
         Attributes:
         ----------
@@ -99,7 +99,9 @@ class CategoricalDriftDetector:
             random_state=random_state,
         )
         self.plot = plot.Plot(self.statistics, self.reference_distance)
-        scoring.check_thresholds(self.statistics, self.reference_distance, thresholds)
+        scoring.generate_drift_limit(
+            self.statistics, self.reference_distance, drift_limit
+        )
 
     def _calculate_frequency(
         self,
@@ -199,7 +201,7 @@ class CategoricalDriftDetector:
             analysis, target_col, datetime_col, self.period
         )
         metrics = self._generate_distance(freq, self.distance_func)
-        metrics["is_drifted"] = metrics["metric"] >= self.statistics["lower_threshold"]
+        metrics["is_drifted"] = metrics["metric"] >= self.statistics["lower_limit"]
         return metrics
 
 
@@ -214,7 +216,7 @@ class ContinuousDriftDetector:
         confidence_level=0.997,
         n_resamples=1000,
         random_state=42,
-        thresholds=(),
+        drift_limit="deviation",
     ):
         """
         A detector for identifying drift in continuous data over time. The detector uses
@@ -281,7 +283,7 @@ class ContinuousDriftDetector:
             random_state=random_state,
         )
         self.plot = plot.Plot(self.statistics, self.reference_ks)
-        scoring.check_thresholds(self.statistics, self.reference_ks, thresholds)
+        scoring.generate_drift_limit(self.statistics, self.reference_ks, drift_limit)
 
     def _calculate_distribution(self, df, column_name, timestamp, period):
         """
@@ -365,6 +367,6 @@ class ContinuousDriftDetector:
             {
                 "datetime": dist.index,
                 "metric": metrics,
-                "is_drifted": metrics <= self.statistics["lower_threshold"],
+                "is_drifted": metrics <= self.statistics["lower_limit"],
             },
         )

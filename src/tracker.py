@@ -18,7 +18,7 @@ class PerformanceTracker:
         confidence_level=0.997,
         n_resamples=1000,
         random_state=42,
-        thresholds=(),
+        drift_limit="deviation",
     ):
         """
         A tracker for monitoring model performance over time using a specified evaluation metric.
@@ -88,8 +88,8 @@ class PerformanceTracker:
             random_state=random_state,
         )
         self.plot = plot.Plot(self.statistics, self.reference_distribution)
-        scoring.check_thresholds(
-            self.statistics, self.reference_distribution, thresholds
+        scoring.generate_drift_limit(
+            self.statistics, self.reference_distribution, drift_limit
         )
 
     def _calculate_metric(
@@ -146,5 +146,5 @@ class PerformanceTracker:
             indicating whether performance drift was detected for each time period.
         """
         res = self._calculate_metric(df, target_col, prediction_col, datetime_col)
-        res["is_drifted"] = res["metric"] <= self.statistics["lower_threshold"]
+        res["is_drifted"] = res["metric"] <= self.statistics["lower_limit"]
         return res
