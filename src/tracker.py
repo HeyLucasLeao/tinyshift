@@ -1,4 +1,5 @@
 import numpy as np
+from . import plot
 from src import scoring
 from sklearn.metrics import f1_score
 import pandas as pd
@@ -35,6 +36,7 @@ class PerformanceTracker:
             n_resamples=n_resamples,
             random_state=random_state,
         )
+        self.plot = plot.Plot(self.statistics, self.reference_distribution)
 
     def _calculate_metric(
         self,

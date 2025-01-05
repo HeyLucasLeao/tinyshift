@@ -3,6 +3,7 @@ import pandas as pd
 from src import scoring
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import ks_2samp
+from . import plot
 
 
 def l_infinity(a, b):
@@ -46,6 +47,7 @@ class CategoricalDriftDetector:
             n_resamples=n_resamples,
             random_state=random_state,
         )
+        self.plot = plot.Plot(self.statistics, self.reference_distance)
 
     def _calculate_frequency(
         self,
@@ -127,6 +129,7 @@ class ContinuousDriftDetector:
             n_resamples=n_resamples,
             random_state=random_state,
         )
+        self.plot = plot.Plot(self.statistics, self.reference_ks)
 
     def _calculate_distribution(self, df, column_name, timestamp, period):
         """
