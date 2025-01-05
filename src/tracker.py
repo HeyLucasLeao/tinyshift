@@ -12,7 +12,6 @@ class PerformanceTracker:
         timestamp_col,
         period,
         metric_score=f1_score,
-        distance_function="l_infinity",
         statistic=np.mean,
         confidence_level=0.997,
         n_resamples=1000,
@@ -22,7 +21,6 @@ class PerformanceTracker:
         self.prediction_col = prediction_col
         self.timestamp_col = timestamp_col
         self.period = period
-        self.distance_function = distance_function
         self.statistic = statistic
         self.confidence_level = confidence_level
         self.n_resamples = n_resamples
