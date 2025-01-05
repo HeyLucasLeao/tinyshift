@@ -78,22 +78,25 @@ def performance_by_time(reference, analysis, width=800, height=400, fig_type=Non
         opacity=0.5,
     )
 
-    # Adding horizontal lines for thresholds and mean
-    fig.add_hline(
-        y=reference["upper_threshold"],
-        line_dash="dash",
-        line_color="firebrick",
-        name="Upper Threshold",
-        opacity=0.5,
+    lower_threshold, upper_threshold = reference.get("lower_threshold"), reference.get(
+        "upper_threshold"
     )
-
-    fig.add_hline(
-        y=reference["lower_threshold"],
-        line_dash="dash",
-        line_color="firebrick",
-        name="Lower Threshold",
-        opacity=0.5,
-    )
+    if lower_threshold:
+        fig.add_hline(
+            y=reference.get("lower_threshold"),
+            line_dash="dash",
+            line_color="firebrick",
+            name="Lower Threshold",
+            opacity=0.5,
+        )
+    if upper_threshold:
+        fig.add_hline(
+            y=reference.get("upper_threshold"),
+            line_dash="dash",
+            line_color="firebrick",
+            name="Upper Threshold",
+            opacity=0.5,
+        )
 
     fig.add_hline(
         y=reference["mean"],

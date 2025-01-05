@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from src import scoring
 from scipy.spatial.distance import jensenshannon
+from scipy.stats import ks_2samp
 
 
 def l_infinity(a, b):
@@ -92,3 +93,78 @@ class CategoricalDriftDetector:
             distances[i] = dist
 
         return pd.DataFrame({"datetime": index, "metric": distances[1:]}).reset_index()
+
+
+class ContinuousDriftDetector:
+    def __init__(
+        self,
+        reference_data,
+        target_col,
+        datetime_col,
+        period,
+        statistic=np.mean,
+        confidence_level=0.997,
+        n_resamples=1000,
+        random_state=42,
+    ):
+
+        # Initialize frequency and statistics
+        self.reference_distribution = self._calculate_distribution(
+            reference_data,
+            target_col,
+            datetime_col,
+            period,
+        )
+
+        self.reference_ks = self._generate_ks(
+            self.reference_distribution,
+        )
+
+        self.statistics = scoring.calculate_statistics(
+            self.reference_ks,
+            confidence_level,
+            statistic,
+            n_resamples=n_resamples,
+            random_state=random_state,
+        )
+
+    def _calculate_distribution(self, df, column_name, timestamp, period):
+        """
+        Calculates the continuous distribution grouped by a given period.
+
+        Args:
+            df (pd.DataFrame): DataFrame containing the data.
+            column_name (str): Name of the column to aggregate.
+            period (str): Period for grouping (e.g., '1D', '1H').
+            timestamp (str): Name of the timestamp column.
+
+        Returns:
+            pd.Series: Series containing lists of values grouped by the specified period.
+        """
+        return (
+            df[[timestamp, column_name]]
+            .copy()
+            .groupby(pd.Grouper(key=timestamp, freq=period))[column_name]
+            .agg(list)
+        )
+
+    def _generate_ks(self, p):
+        """
+        Calculates a metric based on the Kolmogorov-Smirnov test in a cummulative rolling window.
+
+        Args:
+            p (pd.Series): Series of lists representing distributions for each period.
+
+        Returns:
+            pd.DataFrame: DataFrame with the indices and calculated metric.
+        """
+        n = p.shape[0]
+        p_values = np.zeros(n)
+        past_values = np.array([], dtype=float)
+
+        for i in range(1, n):
+            past_values = np.concatenate([past_values, p[i - 1]])
+            _, p_value = ks_2samp(past_values, p[i])
+            p_values[i] = p_value
+
+        return pd.DataFrame({"datetime": p.index[1:], "metric": p_values[1:]})
