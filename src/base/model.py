@@ -167,10 +167,29 @@ class BaseModel:
         upper_limit = center_value + factor * spread_value
         return lower_limit, upper_limit
 
+    def _iqr_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
+        """
+        Calculates thresholds using IQR and median with a default factor of 1.5.
+        """
+
+        def iqr(x):
+            q75, q25 = np.percentile(x, [75, 25])
+            return q75 - q25
+
+        return self._calculate_threshold(df["metric"], np.median, iqr, factor=1.5)
+
+    def _percentile_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
+        """Calculates thresholds using the 1st and 99th percentiles."""
+        lower_limit = np.percentile(df["metric"], 1, method="lower")
+        upper_limit = np.percentile(df["metric"], 99, method="higher")
+        return lower_limit, upper_limit
+
     def _deviation_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
+        """Calculates thresholds using mean and standard deviation."""
         return self._calculate_threshold(df["metric"], np.mean, np.std)
 
     def _mad_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
+        """Calculates thresholds using mean and Median Absolute Deviation (MAD)."""
         mad = lambda x: np.median(np.abs(x - np.median(x)))
         return self._calculate_threshold(df["metric"], np.mean, mad)
 
@@ -188,6 +207,10 @@ class BaseModel:
                 lower_limit, upper_limit = self._deviation_threshold(distribution)
             elif drift_limit == "mad":
                 lower_limit, upper_limit = self._mad_threshold(distribution)
+            elif drift_limit == "iqr":
+                lower_limit, upper_limit = self._iqr_threshold(distribution)
+            elif drift_limit == "percentile":
+                lower_limit, upper_limit = self._percentile_threshold(distribution)
             else:
                 raise ValueError(f"Unsupported drift limit method: {drift_limit}")
         elif callable(drift_limit):
