@@ -1,0 +1,18 @@
+[project]
+name = "tinyshift"
+version = "0.0.1"
+authors = [
+  { name="Lucas Leão", email="heylucasleao@gmail.com" },
+]
+description = "A tiny project toolbox"
+readme = "README.md"
+requires-python = ">=3.1"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/HeyLucasLeao/tinyshift"
+Issues = "https://github.com/HeyLucasLeao/tinyshift/issues"
