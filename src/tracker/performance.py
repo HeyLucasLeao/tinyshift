@@ -189,5 +189,5 @@ class PerformanceTracker(BaseModel):
         metrics = self._calculate_metric(
             analysis, target_col, prediction_col, datetime_col
         )
-        metrics["is_drifted"] = self.is_drifted(metrics)
+        metrics["is_drifted"] = self._is_drifted(metrics)
         return metrics

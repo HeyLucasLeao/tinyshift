@@ -218,5 +218,5 @@ class ContinuousDriftDetector(BaseModel):
                 "metric": metrics,
             },
         )
-        metrics["is_drifted"] = self.is_drifted(metrics)
+        metrics["is_drifted"] = self._is_drifted(metrics)
         return metrics

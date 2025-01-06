@@ -87,7 +87,6 @@ class BaseModel:
         """
         np.random.seed(random_state)
         data = np.asarray(data)
-        n = len(data)
 
         # Bootstrap resampling
         sample_statistics = self._bootstrap_statistics(data, statistic, n_resamples)
@@ -235,7 +234,7 @@ class BaseModel:
         if not isinstance(period, str):
             raise TypeError("period must be a string (e.g., 'W', 'M').")
 
-    def is_drifted(self, df: pd.DataFrame) -> pd.Series:
+    def _is_drifted(self, df: pd.DataFrame) -> pd.Series:
         """
         Checks if metrics in the DataFrame are outside specified limits
         and returns the drift status.
