@@ -33,7 +33,7 @@ Below are basic examples of how to use TinyShift's features.
 To detect data drift, simply score in a new dataset to compare with the reference data. The DataDriftDetector will calculate metrics to identify significant differences.
 
 ```python
-from tinyshift.detector.categorical import CategoricalDriftDetector
+from tinyshift.detector import CategoricalDriftDetector
 
 df = pd.DataFrame("examples.csv")
 df_reference = df[(df["datetime"] < '2024-07-01')].copy()
@@ -49,7 +49,7 @@ print(analysis_score)
 ### 2. Performance Tracker
 To track model performance over time, use the PerformanceMonitor, which will compare model accuracy on both old and new data.
 ```python
-from tinyshift.tracker.performance import PerformanceTracker
+from tinyshift.tracker import PerformanceTracker
 
 df_reference = pd.read_csv('refence.csv')
 df_analysis = pd.read_csv('analysis.csv')
@@ -79,7 +79,7 @@ tinyshift
 ├── README.md
 ├── example.ipynb
 ├── pyproject.toml
-└── src
+└── tinyshift
     ├── base
     │   ├── __init__.py
     │   └── model.py
