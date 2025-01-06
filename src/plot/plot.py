@@ -2,98 +2,46 @@ import plotly.graph_objects as go
 import numpy as np
 import plotly.express as px
 import scipy.stats
+import pandas as pd
 
 
 class Plot:
-    def __init__(
-        self,
-        statistics,
-        distribution,
-    ):
+    def __init__(self, statistics, distribution):
         self.statistics = statistics
         self.distribution = distribution
 
-    def kde(self, width=600, height=400, fig_type=None):
+    def _update_layout(
+        self,
+        title: str,
+        xaxis_title: str,
+        yaxis_title: str,
+        width: int,
+        height: int,
+    ):
         """
-        This function generates a Kernel Density Estimate (KDE) plot for a given column in the DataFrame.
+        Helper function to update layout settings for the plots.
         """
-        # Create x values for the plot based on the range of the column
-        x_vals = np.linspace(
-            self.distribution["metric"].min(), self.distribution["metric"].max(), 1000
-        )
-
-        # Compute the Kernel Density Estimate (KDE) of the selected column
-        kde = scipy.stats.gaussian_kde(self.distribution["metric"])
-
-        # Create the KDE plot
-        fig = px.line(x=x_vals, y=kde(x_vals))
-
-        # Customize the layout of the plot
-        fig.update_layout(
-            title=f"Distribution of metric with Kernel Density Estimate (KDE)",
-            xaxis_title="Metric",
-            yaxis_title="Density",
+        return dict(
+            title=title,
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
             width=width,
             height=height,
+            showlegend=True,
+            bargap=0,
+            bargroupgap=0,
         )
 
-        # Display the plot
-        return fig.show(fig_type)
-
-    def performance_by_time(self, analysis, width=800, height=400, fig_type=None):
+    def _add_limits(self, fig):
         """
-        This function generates a time-series plot that shows the performance of a metric over time
-        with a fixed confidence interval and threshold lines.
-
-        Parameters:
-        - statistics: A DataFrame containing the statistics values such as confidence interval bounds,
-                        upper and lower thresholds, and mean.
-        - analysis: A DataFrame containing the time-series data with datetime and metric values.
-
-        The plot includes:
-        - A line for the metric values over time.
-        - A shaded area representing the fixed confidence interval.
-        - Horizontal lines indicating the upper and lower thresholds, and the mean value.
+        Helper function to add the lower and upper limits and the mean line to the plot.
         """
-        # Creating the plot
-        fig = go.Figure()
-
-        # Adding the metric values as a line with markers
-        fig.add_trace(
-            go.Scatter(
-                x=analysis["datetime"],
-                y=analysis["metric"],
-                mode="lines+markers",
-                name="Metric",
-            )
-        )
-
-        # Adding the fixed confidence interval (shaded area)
-        fig.add_trace(
-            go.Scatter(
-                x=analysis["datetime"],
-                y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
-                fill="toself",
-                fillcolor="rgba(0, 100, 255, 0.2)",  # Blue with opacity
-                line=dict(color="rgba(255,255,255,0)"),  # No border line
-                name="Fixed Confidence Interval",
-            )
-        )
-
-        fig.add_hrect(
-            y0=self.statistics["ci_lower"],
-            y1=self.statistics["ci_upper"],
-            line_width=0,
-            fillcolor="lightblue",
-            opacity=0.5,
-        )
-
         lower_limit, upper_limit = self.statistics.get(
             "lower_limit"
         ), self.statistics.get("upper_limit")
         if lower_limit:
             fig.add_hline(
-                y=self.statistics.get("lower_limit"),
+                y=lower_limit,
                 line_dash="dash",
                 line_color="firebrick",
                 name="Lower Limit",
@@ -101,7 +49,7 @@ class Plot:
             )
         if upper_limit:
             fig.add_hline(
-                y=self.statistics.get("upper_limit"),
+                y=upper_limit,
                 line_dash="dash",
                 line_color="firebrick",
                 name="Upper Limit",
@@ -116,18 +64,150 @@ class Plot:
             name="Mean",
         )
 
-        # Adding labels and title
+    def kde(
+        self,
+        width: int = 600,
+        height: int = 400,
+        fig_type: str = None,
+    ):
+        """
+        Generate a Kernel Density Estimate (KDE) plot for the distribution's metric.
+        """
+        x_vals = np.linspace(
+            self.distribution["metric"].min(), self.distribution["metric"].max(), 1000
+        )
+        kde = scipy.stats.gaussian_kde(self.distribution["metric"])
+
+        # Create KDE plot using plotly.express
+        fig = px.line(x=x_vals, y=kde(x_vals))
         fig.update_layout(
-            title="Metric Over Time with Fixed Confidence Interval",
-            xaxis_title="Time",
-            yaxis_title="Metric",
-            showlegend=True,
-            width=width,
-            height=height,
+            self._update_layout(
+                "Distribution of metric with Kernel Density Estimate (KDE)",
+                "Metric",
+                "Density",
+                width,
+                height,
+            )
         )
 
-        fig.update_layout(hovermode="x")
-        fig.update_traces(hovertemplate="%{y}")
+        return fig.show(fig_type)
 
-        # Display the plot
+    def diverging_bar_over_time(
+        self,
+        analysis: pd.DataFrame,
+        width: int = 800,
+        height: int = 400,
+        fig_type: str = None,
+    ):
+        """
+        Generate a diverging bar plot showing metric over time relative to a reference line.
+        """
+        reference_line = self.statistics["mean"]
+        positive_bars = np.maximum(analysis["metric"] - reference_line, 0)
+        negative_bars = np.maximum(reference_line - analysis["metric"], 0)
+
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Bar(
+                x=analysis["datetime"],
+                y=positive_bars,
+                base=[reference_line] * len(positive_bars),
+                name="Above Reference",
+                marker_color="lightslategrey",
+                customdata=analysis.loc[analysis["metric"] >= reference_line, "metric"],
+                hovertemplate="(%{x},%{y:.3f})",
+                opacity=0.7,
+            )
+        )
+
+        fig.add_trace(
+            go.Bar(
+                x=analysis["datetime"],
+                y=negative_bars,
+                base=reference_line - negative_bars,
+                name="Below Reference",
+                marker_color="crimson",
+                customdata=analysis.loc[analysis["metric"] < reference_line, "metric"],
+                hovertemplate="(%{x},%{base:.3f})",
+                opacity=0.7,
+            )
+        )
+
+        fig.add_hrect(
+            y0=self.statistics["ci_lower"],
+            y1=self.statistics["ci_upper"],
+            line_width=0,
+            fillcolor="lightblue",
+            opacity=0.5,
+            name="Fixed Confidence Interval",
+        )
+
+        self._add_limits(fig)
+
+        fig.update_layout(
+            self._update_layout(
+                "Metric Over Time with Fixed Confidence Interval",
+                "Time",
+                "Metric",
+                width,
+                height,
+            )
+        )
+
+        return fig.show(fig_type)
+
+    def scatterplot_over_time(
+        self,
+        analysis: pd.DataFrame,
+        width: int = 800,
+        height: int = 400,
+        fig_type: str = None,
+    ):
+        """
+        Generate a time-series plot showing the metric performance with confidence interval and thresholds.
+        """
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=analysis["datetime"],
+                y=analysis["metric"],
+                mode="lines+markers",
+                name="Metric",
+            )
+        )
+
+        # Confidence interval shading
+        fig.add_trace(
+            go.Scatter(
+                x=analysis["datetime"],
+                y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
+                fill="toself",
+                fillcolor="rgba(0, 100, 255, 0.2)",
+                line=dict(color="rgba(255,255,255,0)"),
+                name="Fixed Confidence Interval",
+            )
+        )
+
+        fig.add_hrect(
+            y0=self.statistics["ci_lower"],
+            y1=self.statistics["ci_upper"],
+            line_width=0,
+            fillcolor="lightblue",
+            opacity=0.5,
+        )
+
+        self._add_limits(fig)
+
+        fig.update_layout(
+            self._update_layout(
+                "Metric Over Time with Fixed Confidence Interval",
+                "Time",
+                "Metric",
+                width,
+                height,
+            )
+        )
+
         return fig.show(fig_type)
