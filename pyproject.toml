@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tinyshift"
 version = "0.0.2"
-description = "A small toolbox for mlops"
+description = "A small toolbox for MLOps"
 license = {text = "MIT License"}
 authors = [
     {name = "Lucas Leão", email = "heylucasleao@gmail.com"}
@@ -16,11 +16,11 @@ dependencies = [
     "scipy",
     "plotly",
     "scikit-learn",
-    "numpy",
+    "numpy"
 ]
 keywords = ["mlops", "toolbox", "machine-learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+    "Operating System :: OS Independent"
 ]
