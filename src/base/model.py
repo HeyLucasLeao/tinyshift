@@ -194,8 +194,6 @@ class BaseModel:
                 lower_limit, upper_limit = self._mad_threshold(distribution)
             elif drift_limit == "iqr":
                 lower_limit, upper_limit = self._iqr_threshold(distribution)
-            elif drift_limit == "percentile":
-                lower_limit, upper_limit = self._percentile_threshold(distribution)
             else:
                 raise ValueError(f"Unsupported drift limit method: {drift_limit}")
         elif callable(drift_limit):
