@@ -8,7 +8,7 @@ import pandas as pd
 class BaseModel:
     def __init__(
         self,
-        reference_distribution: pd.DataFrame,
+        reference: pd.DataFrame,
         confidence_level: float,
         statistic: Callable,
         n_resamples: int,
@@ -20,7 +20,7 @@ class BaseModel:
 
         Parameters:
         ----------
-        reference_distribution : pd.DataFrame
+        reference : pd.DataFrame
             Data containing the reference distribution with a "metric" column.
         confidence_level : float
             Desired confidence level for statistical calculations (e.g., 0.95).
@@ -34,24 +34,15 @@ class BaseModel:
             Method ("deviation" or "mad") or custom limits for drift thresholding.
         """
 
-        if not isinstance(reference_distribution, pd.DataFrame):
-            raise TypeError("reference_distribution must be a pandas DataFrame.")
-        if "metric" not in reference_distribution.columns:
-            raise KeyError('reference_distribution must contain a "metric" column.')
-        if not 0 < confidence_level <= 1:
-            raise ValueError("confidence_level must be between 0 and 1.")
-        if n_resamples <= 0:
-            raise ValueError("n_resamples must be a positive integer.")
-
         self.statistics = self._statistic_generate(
-            reference_distribution,
+            reference,
             confidence_level,
             statistic,
             n_resamples,
             random_state,
         )
-        self.plot = plot.Plot(self.statistics, reference_distribution)
-        self._drift_limit_generate(self.statistics, reference_distribution, drift_limit)
+        self.plot = plot.Plot(self.statistics, reference)
+        self._drift_limit_generate(self.statistics, reference, drift_limit)
 
     def _jackknife_acceleration(self, data: np.ndarray, statistic: Callable) -> float:
         """Calculate the acceleration parameter using jackknife resampling."""
@@ -219,6 +210,32 @@ class BaseModel:
         # Update the statistics dictionary with the new thresholds
         statistics["lower_limit"] = lower_limit
         statistics["upper_limit"] = upper_limit
+
+    def _validate_columns(
+        self,
+        df: pd.DataFrame,
+        target_col: str,
+        datetime_col: str,
+    ):
+        if target_col not in df.columns:
+            raise KeyError(f"Column {target_col} is not in the DataFrame.")
+        if datetime_col not in df.columns:
+            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
+        if not pd.api.types.is_datetime64_any_dtype(df[datetime_col]):
+            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+
+    def _validate_params(
+        self,
+        confidence_level: float,
+        n_resamples: int,
+        period: str,
+    ):
+        if not 0 < confidence_level <= 1:
+            raise ValueError("confidence_level must be between 0 and 1.")
+        if n_resamples <= 0:
+            raise ValueError("n_resamples must be a positive integer.")
+        if not isinstance(period, str):
+            raise TypeError("period must be a string (e.g., 'W', 'M').")
 
     def is_drifted(self, df: pd.DataFrame) -> pd.Series:
         """

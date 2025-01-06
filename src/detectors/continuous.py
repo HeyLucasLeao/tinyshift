@@ -64,12 +64,8 @@ class ContinuousDriftDetector(BaseModel):
             A plotting utility for visualizing drift results.
         """
 
-        if target_col not in reference.columns:
-            raise KeyError(f"Column {target_col} is not in the DataFrame.")
-        if datetime_col not in reference.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(reference[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+        self._validate_columns(reference, target_col, datetime_col)
+        self._validate_params(confidence_level, n_resamples, period)
 
         self.period = period
         self.func = func
@@ -207,12 +203,7 @@ class ContinuousDriftDetector(BaseModel):
             indicating whether drift was detected for each time period.
         """
 
-        if target_col not in analysis.columns:
-            raise KeyError(f"Column {target_col} is not in the DataFrame.")
-        if datetime_col not in analysis.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(analysis[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+        self._validate_columns(analysis, target_col, datetime_col)
 
         reference = np.concatenate(self.reference_distribution)
         dist = self._calculate_distribution(

@@ -8,7 +8,7 @@ from typing import Callable, Tuple, Union
 class PerformanceTracker(BaseModel):
     def __init__(
         self,
-        reference_data: pd.DataFrame,
+        reference: pd.DataFrame,
         target_col: str,
         prediction_col: str,
         datetime_col: str,
@@ -27,7 +27,7 @@ class PerformanceTracker(BaseModel):
 
         Parameters:
         ----------
-        reference_data : DataFrame
+        reference : DataFrame
             The reference dataset used to compute the baseline metric distribution.
         target_col : str
             The name of the column containing the actual target values.
@@ -70,12 +70,17 @@ class PerformanceTracker(BaseModel):
             A plotting utility for visualizing performance over time.
         """
 
-        if not 0 < confidence_level <= 1:
-            raise ValueError("confidence_level must be between 0 and 1.")
-        if n_resamples <= 0:
-            raise ValueError("n_resamples must be a positive integer.")
-        if not isinstance(period, str):
-            raise TypeError("period must be a string (e.g., 'W', 'M').")
+        self._validate_params(
+            confidence_level,
+            n_resamples,
+            period,
+        )
+        self._validate_columns(
+            reference,
+            target_col,
+            datetime_col,
+        )
+
         if not callable(metric_score):
             raise TypeError("metric_score must be a callable function.")
 
@@ -84,7 +89,7 @@ class PerformanceTracker(BaseModel):
 
         # Initialize distributions and statistics
         self.reference_distribution = self._calculate_metric(
-            reference_data,
+            reference,
             target_col,
             prediction_col,
             datetime_col,
@@ -166,6 +171,8 @@ class PerformanceTracker(BaseModel):
             A DataFrame containing datetime values, calculated metrics, and a boolean
             indicating whether performance drift was detected for each time period.
         """
+
+        self._validate_columns(analysis, target_col, datetime_col)
 
         if target_col not in analysis.columns or prediction_col not in analysis.columns:
             raise KeyError(
