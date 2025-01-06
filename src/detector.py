@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import ks_2samp
 from .base import BaseModel
+from typing import Callable, Tuple, Union
 
 
 def l_infinity(a, b):
@@ -15,16 +16,16 @@ def l_infinity(a, b):
 class CategoricalDriftDetector(BaseModel):
     def __init__(
         self,
-        reference_data,
-        target_col,
-        datetime_col,
-        period,
-        distance_func="l_infinity",
-        statistic=np.mean,
-        confidence_level=0.997,
-        n_resamples=1000,
-        random_state=42,
-        drift_limit="deviation",
+        reference: pd.DataFrame,
+        target_col: str,
+        datetime_col: str,
+        period: str,
+        distance_func: str = "l_infinity",
+        statistic: Callable = np.mean,
+        confidence_level: float = 0.997,
+        n_resamples: int = 1000,
+        random_state: int = 42,
+        drift_limit: Union[str, Tuple[float, float]] = "deviation",
     ):
         """
         A detector for identifying drift in categorical data over time. The detector uses
@@ -33,7 +34,7 @@ class CategoricalDriftDetector(BaseModel):
 
         Parameters:
         ----------
-        reference_data : DataFrame
+        reference : DataFrame
             The reference dataset used to compute the baseline distribution.
         target_col : str
             The name of the column containing the categorical variable to analyze.
@@ -74,12 +75,19 @@ class CategoricalDriftDetector(BaseModel):
             A plotting utility for visualizing drift results.
         """
 
+        if target_col not in reference.columns:
+            raise KeyError(f"Column {target_col} is not in the DataFrame.")
+        if datetime_col not in reference.columns:
+            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
+        if not pd.api.types.is_datetime64_any_dtype(reference[datetime_col]):
+            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+
         self.period = period
         self.distance_func = distance_func
 
         # Initialize frequency and statistics
         self.reference_frequency = self._calculate_frequency(
-            reference_data,
+            reference,
             target_col,
             datetime_col,
             period,
@@ -101,11 +109,11 @@ class CategoricalDriftDetector(BaseModel):
 
     def _calculate_frequency(
         self,
-        df,
-        target_col,
-        datetime_col,
-        period,
-    ):
+        df: pd.DataFrame,
+        target_col: str,
+        datetime_col: str,
+        period: str,
+    ) -> pd.DataFrame:
         """
         Calculate the frequency distribution of the target column grouped by a time period.
 
@@ -126,18 +134,19 @@ class CategoricalDriftDetector(BaseModel):
             A pivot table of frequencies with time periods as rows and categorical
             values as columns.
         """
-        grouped = (
-            df.groupby(pd.Grouper(key=datetime_col, freq=period))
-            .apply(lambda x: x[target_col].value_counts())
-            .rename("metric")
-            .reset_index()
-            .rename(columns={"level_1": target_col})
+        freq = (
+            df.groupby([pd.Grouper(key=datetime_col, freq=period), target_col])
+            .size()
+            .unstack(fill_value=0)
         )
 
-        grouped = grouped.set_index([datetime_col, target_col]).unstack(fill_value=0)
-        return grouped
+        return freq
 
-    def _generate_distance(self, p, distance_func):
+    def _generate_distance(
+        self,
+        p: pd.DataFrame,
+        distance_func: str,
+    ) -> pd.DataFrame:
         """
         Compute a distance metric between consecutive periods in the frequency distribution.
 
@@ -175,7 +184,12 @@ class CategoricalDriftDetector(BaseModel):
 
         return pd.DataFrame({"datetime": index, "metric": distances[1:]})
 
-    def score(self, analysis, target_col, datetime_col):
+    def score(
+        self,
+        analysis: pd.DataFrame,
+        target_col: str,
+        datetime_col: str,
+    ) -> pd.DataFrame:
         """
         Assess drift in the provided dataset by comparing its distribution to the reference.
 
@@ -193,6 +207,13 @@ class CategoricalDriftDetector(BaseModel):
         DataFrame
             A DataFrame containing metrics and drift detection results for each time period.
         """
+        if target_col not in analysis.columns:
+            raise KeyError(f"Column {target_col} is not in the DataFrame.")
+        if datetime_col not in analysis.columns:
+            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
+        if not pd.api.types.is_datetime64_any_dtype(analysis[datetime_col]):
+            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+
         freq = self._calculate_frequency(
             analysis, target_col, datetime_col, self.period
         )
@@ -204,7 +225,7 @@ class CategoricalDriftDetector(BaseModel):
 class ContinuousDriftDetector(BaseModel):
     def __init__(
         self,
-        reference_data,
+        reference,
         target_col,
         datetime_col,
         period,
@@ -221,7 +242,7 @@ class ContinuousDriftDetector(BaseModel):
 
         Parameters:
         ----------
-        reference_data : DataFrame
+        reference : DataFrame
             The reference dataset used to compute the baseline distribution.
         target_col : str
             The name of the column containing the continuous variable to analyze.
@@ -258,10 +279,18 @@ class ContinuousDriftDetector(BaseModel):
         plot : Plot
             A plotting utility for visualizing drift results.
         """
+
+        if target_col not in reference.columns:
+            raise KeyError(f"Column {target_col} is not in the DataFrame.")
+        if datetime_col not in reference.columns:
+            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
+        if not pd.api.types.is_datetime64_any_dtype(reference[datetime_col]):
+            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+
         self.period = period
         # Initialize frequency and statistics
         self.reference_distribution = self._calculate_distribution(
-            reference_data,
+            reference,
             target_col,
             datetime_col,
             period,
@@ -280,13 +309,19 @@ class ContinuousDriftDetector(BaseModel):
             drift_limit,
         )
 
-    def _calculate_distribution(self, df, column_name, timestamp, period):
+    def _calculate_distribution(
+        self,
+        df: pd.DataFrame,
+        column_name: str,
+        timestamp: str,
+        period: str,
+    ) -> pd.Series:
         """
         Calculate the continuous distribution of a target column grouped by a given period.
 
         Parameters:
         ----------
-        df : DataFrame
+        df : pd.DataFrame
             The dataset to analyze.
         column_name : str
             The name of the column containing the continuous variable.
@@ -297,8 +332,9 @@ class ContinuousDriftDetector(BaseModel):
 
         Returns:
         -------
-        Series
-            A Pandas Series containing lists of values grouped by the specified period.
+        pd.Series
+            A Pandas Series where each index corresponds to a time period, and each value is
+            a list of continuous values for that period.
         """
         return (
             df[[timestamp, column_name]]
@@ -307,7 +343,10 @@ class ContinuousDriftDetector(BaseModel):
             .agg(list)
         )
 
-    def _generate_ks(self, p):
+    def _generate_ks(
+        self,
+        p: pd.Series,
+    ) -> pd.DataFrame:
         """
         Calculate the Kolmogorov-Smirnov test metric over a rolling cumulative window.
 
@@ -334,13 +373,18 @@ class ContinuousDriftDetector(BaseModel):
 
         return pd.DataFrame({"datetime": p.index[1:], "metric": p_values[1:]})
 
-    def score(self, df, target_col, datetime_col):
+    def score(
+        self,
+        analysis: pd.DataFrame,
+        target_col: str,
+        datetime_col: str,
+    ) -> pd.DataFrame:
         """
         Assess drift in the provided dataset by comparing its distribution to the reference.
 
         Parameters:
         ----------
-        df : DataFrame
+        analysis : DataFrame
             The dataset to analyze for drift.
         target_col : str
             The name of the continuous column in the analysis dataset.
@@ -353,8 +397,18 @@ class ContinuousDriftDetector(BaseModel):
             A DataFrame containing datetime values, drift metrics, and a boolean
             indicating whether drift was detected for each time period.
         """
+
+        if target_col not in analysis.columns:
+            raise KeyError(f"Column {target_col} is not in the DataFrame.")
+        if datetime_col not in analysis.columns:
+            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
+        if not pd.api.types.is_datetime64_any_dtype(analysis[datetime_col]):
+            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+
         reference = np.concatenate(self.reference_distribution)
-        dist = self._calculate_distribution(df, target_col, datetime_col, self.period)
+        dist = self._calculate_distribution(
+            analysis, target_col, datetime_col, self.period
+        )
 
         metrics = np.array([ks_2samp(reference, row)[1] for row in dist])
 

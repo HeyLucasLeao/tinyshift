@@ -100,10 +100,10 @@ class PerformanceTracker(BaseModel):
 
     def _calculate_metric(
         self,
-        df,
-        target_col,
-        prediction_col,
-        datetime_col,
+        df: pd.DataFrame,
+        target_col: str,
+        prediction_col: str,
+        datetime_col: str,
     ):
         """
         Calculate the performance metric for each time period in the dataset.
@@ -138,14 +138,20 @@ class PerformanceTracker(BaseModel):
         )
         return grouped.reset_index(name="metric")
 
-    def score(self, df, target_col, prediction_col, datetime_col):
+    def score(
+        self,
+        analysis: pd.DataFrame,
+        target_col: str,
+        prediction_col: str,
+        datetime_col: str,
+    ):
         """
         Assess model performance over time by calculating the evaluation metric
         for each time period and comparing it to the reference distribution.
 
         Parameters:
         ----------
-        df : DataFrame
+        analysis : DataFrame
             The dataset to analyze for performance drift.
         target_col : str
             The name of the column containing the actual target values.
@@ -160,8 +166,19 @@ class PerformanceTracker(BaseModel):
             A DataFrame containing datetime values, calculated metrics, and a boolean
             indicating whether performance drift was detected for each time period.
         """
-        if df.empty:
+
+        if target_col not in analysis.columns or prediction_col not in analysis.columns:
+            raise KeyError(
+                f"Columns {target_col} and/or {prediction_col} are not in the DataFrame."
+            )
+        if datetime_col not in analysis.columns:
+            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
+        if not pd.api.types.is_datetime64_any_dtype(analysis[datetime_col]):
+            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+
+        if analysis.empty:
             raise ValueError("Input DataFrame is empty.")
-        res = self._calculate_metric(df, target_col, prediction_col, datetime_col)
+
+        res = self._calculate_metric(analysis, target_col, prediction_col, datetime_col)
         res["is_drifted"] = res["metric"] <= self.statistics["lower_limit"]
         return res
