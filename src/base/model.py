@@ -178,12 +178,6 @@ class BaseModel:
 
         return self._calculate_threshold(df["metric"], np.median, iqr, factor=1.5)
 
-    def _percentile_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
-        """Calculates thresholds using the 1st and 99th percentiles."""
-        lower_limit = np.percentile(df["metric"], 1, method="lower")
-        upper_limit = np.percentile(df["metric"], 99, method="higher")
-        return lower_limit, upper_limit
-
     def _deviation_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
         """Calculates thresholds using mean and standard deviation."""
         return self._calculate_threshold(df["metric"], np.mean, np.std)
@@ -225,3 +219,17 @@ class BaseModel:
         # Update the statistics dictionary with the new thresholds
         statistics["lower_limit"] = lower_limit
         statistics["upper_limit"] = upper_limit
+
+    def is_drifted(self, df: pd.DataFrame) -> pd.Series:
+        """
+        Checks if metrics in the DataFrame are outside specified limits
+        and returns the drift status.
+        """
+        is_drifted = pd.Series([False] * len(df))
+
+        if self.statistics["lower_limit"] is not None:
+            is_drifted |= df["metric"] <= self.statistics["lower_limit"]
+        if self.statistics["upper_limit"] is not None:
+            is_drifted |= df["metric"] >= self.statistics["upper_limit"]
+
+        return is_drifted
