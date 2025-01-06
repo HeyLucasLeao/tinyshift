@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.metrics import f1_score
 import pandas as pd
-from .base import BaseModel
+from ..base.model import BaseModel
 from typing import Callable, Tuple, Union
 
 

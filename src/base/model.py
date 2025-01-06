@@ -1,4 +1,4 @@
-from . import plot
+from ..plot import plot
 import numpy as np
 from scipy.stats import norm
 from typing import Callable, Union, Tuple, Dict
