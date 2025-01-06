@@ -19,7 +19,7 @@ class CategoricalDriftDetector(BaseModel):
         target_col: str,
         datetime_col: str,
         period: str,
-        distance_func: str = "l_infinity",
+        func: str = "l_infinity",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
         n_resamples: int = 1000,
@@ -41,7 +41,7 @@ class CategoricalDriftDetector(BaseModel):
             The name of the column containing datetime values for temporal grouping.
         period : str
             The frequency for grouping data (e.g., 'D' for daily, 'M' for monthly).
-        distance_func : str, optional
+        func : str, optional
             The distance function to use ('l_infinity' or 'jensenshannon').
             Default is 'l_infinity'.
         statistic : callable, optional
@@ -82,23 +82,23 @@ class CategoricalDriftDetector(BaseModel):
             raise TypeError(f"Column {datetime_col} must be of datetime type.")
 
         self.period = period
-        self.distance_func = distance_func
+        self.func = func
 
         # Initialize frequency and statistics
-        self.reference_frequency = self._calculate_frequency(
+        self.reference_distribution = self._calculate_frequency(
             reference,
             target_col,
             datetime_col,
             period,
         )
 
-        self.reference_distribution = self._generate_distance(
-            self.reference_frequency,
-            distance_func,
+        self.reference_distance = self._generate_distance(
+            self.reference_distribution,
+            func,
         )
 
         super().__init__(
-            self.reference_distribution,
+            self.reference_distance,
             confidence_level,
             statistic,
             n_resamples,
@@ -141,10 +141,21 @@ class CategoricalDriftDetector(BaseModel):
 
         return freq
 
+    def _selection_function(self, func_name: str) -> Callable:
+        """Returns a specific function based on the given function name."""
+
+        if func_name == "l_infinity":
+            selected_func = l_infinity
+        elif func_name == "jensenshannon":
+            selected_func = jensenshannon
+        else:
+            raise ValueError(f"Unsupported distance function: {func_name}")
+        return selected_func
+
     def _generate_distance(
         self,
         p: pd.DataFrame,
-        distance_func: str,
+        func_name: str,
     ) -> pd.DataFrame:
         """
         Compute a distance metric between consecutive periods in the frequency distribution.
@@ -153,7 +164,7 @@ class CategoricalDriftDetector(BaseModel):
         ----------
         p : DataFrame
             The frequency distribution with time periods as rows and categorical values as columns.
-        distance_func : str
+        func : str
             The distance function to use ('l_infinity' or 'jensenshannon').
 
         Returns:
@@ -166,13 +177,7 @@ class CategoricalDriftDetector(BaseModel):
         past_value = np.zeros(p.shape[1], dtype=np.int32)
         index = p.index[1:]
         p = np.asarray(p)
-
-        if distance_func == "l_infinity":
-            func = l_infinity
-        elif distance_func == "jensenshannon":
-            func = jensenshannon
-        else:
-            raise ValueError(f"Unsupported distance function: {distance_func}")
+        func = self._selection_function(func_name)
 
         for i in range(1, n):
             past_value = past_value + p[i - 1]
@@ -216,6 +221,6 @@ class CategoricalDriftDetector(BaseModel):
         freq = self._calculate_frequency(
             analysis, target_col, datetime_col, self.period
         )
-        metrics = self._generate_distance(freq, self.distance_func)
-        metrics["is_drifted"] = metrics["metric"] >= self.statistics["lower_limit"]
+        metrics = self._generate_distance(freq, self.func)
+        metrics["is_drifted"] = self.is_drifted(metrics)
         return metrics

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from scipy.stats import ks_2samp
+from scipy.stats import ks_2samp, wasserstein_distance
 from ..base.model import BaseModel
 from typing import Callable, Tuple, Union
 
@@ -12,6 +12,7 @@ class ContinuousDriftDetector(BaseModel):
         target_col: str,
         datetime_col: str,
         period: str,
+        func: str = "ws",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
         n_resamples: int = 1000,
@@ -71,6 +72,8 @@ class ContinuousDriftDetector(BaseModel):
             raise TypeError(f"Column {datetime_col} must be of datetime type.")
 
         self.period = period
+        self.func = func
+
         # Initialize frequency and statistics
         self.reference_distribution = self._calculate_distribution(
             reference,
@@ -79,12 +82,12 @@ class ContinuousDriftDetector(BaseModel):
             period,
         )
 
-        self.reference_ks = self._generate_ks(
-            self.reference_distribution,
+        self.reference_distance = self._generate_distance(
+            self.reference_distribution, func
         )
 
         super().__init__(
-            self.reference_ks,
+            self.reference_distance,
             confidence_level,
             statistic,
             n_resamples,
@@ -126,9 +129,30 @@ class ContinuousDriftDetector(BaseModel):
             .agg(list)
         )
 
-    def _generate_ks(
+    def _ks(self, a, b):
+        """Calculate the Kolmogorov-Smirnov test and return the p_value."""
+        _, p_value = ks_2samp(a, b)
+        return p_value
+
+    def _wasserstein(self, a, b):
+        """Calculate the Wasserstein Distance."""
+        return wasserstein_distance(a, b)
+
+    def _selection_function(self, func_name: str) -> Callable:
+        """Returns a specific function based on the given function name."""
+
+        if func_name == "ws":
+            selected_func = self._wasserstein
+        elif func_name == "ks":
+            selected_func = self._ks
+        else:
+            raise ValueError(f"Unsupported function: {func_name}")
+        return selected_func
+
+    def _generate_distance(
         self,
         p: pd.Series,
+        func_name: Callable,
     ) -> pd.DataFrame:
         """
         Calculate the Kolmogorov-Smirnov test metric over a rolling cumulative window.
@@ -145,16 +169,18 @@ class ContinuousDriftDetector(BaseModel):
             A DataFrame containing datetime indices and the calculated KS test metric
             for each period.
         """
+        func = self._selection_function(func_name)
+
         n = p.shape[0]
-        p_values = np.zeros(n)
+        values = np.zeros(n)
         past_values = np.array([], dtype=float)
 
         for i in range(1, n):
             past_values = np.concatenate([past_values, p[i - 1]])
-            _, p_value = ks_2samp(past_values, p[i])
-            p_values[i] = p_value
+            value = func(past_values, p[i])
+            values[i] = value
 
-        return pd.DataFrame({"datetime": p.index[1:], "metric": p_values[1:]})
+        return pd.DataFrame({"datetime": p.index[1:], "metric": values[1:]})
 
     def score(
         self,
@@ -193,12 +219,13 @@ class ContinuousDriftDetector(BaseModel):
             analysis, target_col, datetime_col, self.period
         )
 
-        metrics = np.array([ks_2samp(reference, row)[1] for row in dist])
-
-        return pd.DataFrame(
+        func = self._selection_function(self.func)
+        metrics = np.array([func(reference, row) for row in dist])
+        metrics = pd.DataFrame(
             {
                 "datetime": dist.index,
                 "metric": metrics,
-                "is_drifted": metrics <= self.statistics["lower_limit"],
             },
         )
+        metrics["is_drifted"] = self.is_drifted(metrics)
+        return metrics
