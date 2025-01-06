@@ -74,18 +74,13 @@ class CategoricalDriftDetector(BaseModel):
             A plotting utility for visualizing drift results.
         """
 
-        if target_col not in reference.columns:
-            raise KeyError(f"Column {target_col} is not in the DataFrame.")
-        if datetime_col not in reference.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(reference[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+        self._validate_columns(reference, target_col, datetime_col)
+        self._validate_params(confidence_level, n_resamples, period)
 
         self.period = period
-        self.func = func
+        self.func = self._selection_function(func)
 
-        # Initialize frequency and statistics
-        self.reference_distribution = self._calculate_frequency(
+        self.reference_frequency = self._calculate_frequency(
             reference,
             target_col,
             datetime_col,
@@ -93,8 +88,7 @@ class CategoricalDriftDetector(BaseModel):
         )
 
         self.reference_distance = self._generate_distance(
-            self.reference_distribution,
-            func,
+            self.reference_frequency,
         )
 
         super().__init__(
@@ -155,7 +149,6 @@ class CategoricalDriftDetector(BaseModel):
     def _generate_distance(
         self,
         p: pd.DataFrame,
-        func_name: str,
     ) -> pd.DataFrame:
         """
         Compute a distance metric between consecutive periods in the frequency distribution.
@@ -177,13 +170,12 @@ class CategoricalDriftDetector(BaseModel):
         past_value = np.zeros(p.shape[1], dtype=np.int32)
         index = p.index[1:]
         p = np.asarray(p)
-        func = self._selection_function(func_name)
 
         for i in range(1, n):
             past_value = past_value + p[i - 1]
             past_value = past_value / np.sum(past_value)
             current_value = p[i] / np.sum(p[i])
-            dist = func(past_value, current_value)
+            dist = self.func(past_value, current_value)
             distances[i] = dist
 
         return pd.DataFrame({"datetime": index, "metric": distances[1:]})
@@ -211,16 +203,24 @@ class CategoricalDriftDetector(BaseModel):
         DataFrame
             A DataFrame containing metrics and drift detection results for each time period.
         """
-        if target_col not in analysis.columns:
-            raise KeyError(f"Column {target_col} is not in the DataFrame.")
-        if datetime_col not in analysis.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(analysis[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+        self._validate_columns(analysis, target_col, datetime_col)
 
+        # Calculate frequency and percentage distribution
         freq = self._calculate_frequency(
             analysis, target_col, datetime_col, self.period
         )
-        metrics = self._generate_distance(freq, self.func)
+        percent = freq.div(freq.sum(axis=1), axis=0)
+
+        # Calculate percentage distribution
+        ref_freq = self.reference_frequency.sum(axis=0)
+        ref_dist = ref_freq / np.sum(ref_freq)
+
+        # Calculate drift metrics for each time period
+        metrics = (
+            percent.apply(lambda row: self.func(row, ref_dist), axis=1)
+            .rename("metric")
+            .reset_index()
+        )
         metrics["is_drifted"] = self.is_drifted(metrics)
+
         return metrics
