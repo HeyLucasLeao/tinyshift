@@ -179,6 +179,8 @@ class PerformanceTracker(BaseModel):
         if analysis.empty:
             raise ValueError("Input DataFrame is empty.")
 
-        res = self._calculate_metric(analysis, target_col, prediction_col, datetime_col)
-        res["is_drifted"] = res["metric"] <= self.statistics["lower_limit"]
-        return res
+        metrics = self._calculate_metric(
+            analysis, target_col, prediction_col, datetime_col
+        )
+        metrics["is_drifted"] = self.is_drifted(metrics)
+        return metrics
