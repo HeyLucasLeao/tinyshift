@@ -1,29 +1,48 @@
 from . import plot
 import numpy as np
 from scipy.stats import norm
+from typing import Callable, Union, Tuple, Dict
+import pandas as pd
 
 
 class BaseModel:
     def __init__(
         self,
-        reference_distribution,
-        confidence_level,
-        statistic,
-        n_resamples,
-        random_state,
-        drift_limit,
+        reference_distribution: pd.DataFrame,
+        confidence_level: float,
+        statistic: Callable,
+        n_resamples: int,
+        random_state: int,
+        drift_limit: Union[str, Tuple[float, float]],
     ):
         """
         Initializes the BaseModel class with reference distribution, statistics, and drift limits.
 
         Parameters:
-        - reference_distribution (pd.DataFrame): Data containing the reference distribution.
-        - confidence_level (float): Desired confidence level for statistical calculations.
-        - statistic (function): Function to compute statistics.
-        - n_resamples (int): Number of bootstrap resamples.
-        - random_state (int): Seed for reproducibility.
-        - drift_limit (str or tuple): Method or custom limits for drift thresholding.
+        ----------
+        reference_distribution : pd.DataFrame
+            Data containing the reference distribution with a "metric" column.
+        confidence_level : float
+            Desired confidence level for statistical calculations (e.g., 0.95).
+        statistic : Callable
+            Function to compute summary statistics (e.g., np.mean).
+        n_resamples : int
+            Number of bootstrap resamples.
+        random_state : int
+            Seed for reproducibility.
+        drift_limit : Union[str, Tuple[float, float]]
+            Method ("deviation" or "mad") or custom limits for drift thresholding.
         """
+
+        if not isinstance(reference_distribution, pd.DataFrame):
+            raise TypeError("reference_distribution must be a pandas DataFrame.")
+        if "metric" not in reference_distribution.columns:
+            raise KeyError('reference_distribution must contain a "metric" column.')
+        if not 0 < confidence_level <= 1:
+            raise ValueError("confidence_level must be between 0 and 1.")
+        if n_resamples <= 0:
+            raise ValueError("n_resamples must be a positive integer.")
+
         self.statistics = self._statistic_generate(
             reference_distribution,
             confidence_level,
@@ -34,14 +53,34 @@ class BaseModel:
         self.plot = plot.Plot(self.statistics, reference_distribution)
         self._drift_limit_generate(self.statistics, reference_distribution, drift_limit)
 
+    def _jackknife_acceleration(self, data: np.ndarray, statistic: Callable) -> float:
+        """Calculate the acceleration parameter using jackknife resampling."""
+        n = len(data)
+        jackknife = np.array([statistic(np.delete(data, i)) for i in range(n)])
+        jackknife_mean = jackknife.mean()
+        diffs = jackknife - jackknife_mean
+        acceleration = np.sum(diffs**3) / (6.0 * (np.sum(diffs**2) ** 1.5))
+        return acceleration
+
+    def _bootstrap_statistics(
+        self, data: np.ndarray, statistic: Callable, n_resamples: int
+    ) -> np.ndarray:
+        """Perform bootstrap resampling and calculate statistics."""
+        return np.array(
+            [
+                statistic(np.random.choice(data, size=len(data), replace=True))
+                for _ in range(n_resamples)
+            ]
+        )
+
     def _bootstrapping_bca(
         self,
-        data,
-        confidence_level,
-        statistic,
-        n_resamples,
-        random_state,
-    ):
+        data: pd.Series,
+        confidence_level: float,
+        statistic: Callable,
+        n_resamples: int,
+        random_state: int,
+    ) -> Union[float, float]:
         """
         Calculates the bias-corrected and accelerated (BCa) bootstrap confidence interval for the given data.
 
@@ -59,38 +98,11 @@ class BaseModel:
         data = np.asarray(data)
         n = len(data)
 
-        def generate_acceleration(data):
-            """
-            Calculates the acceleration parameter using jackknife resampling.
-            """
-            jackknife = np.zeros(n)
-            for i in range(n):
-                jackknife_sample = np.delete(data, i)
-                jackknife[i] = statistic(jackknife_sample)
-
-            jackknife_mean = np.mean(jackknife)
-            jackknife_diffs = jackknife - jackknife_mean
-            acceleration = np.sum(jackknife_diffs**3) / (
-                6.0 * (np.sum(jackknife_diffs**2) ** 1.5)
-            )
-            return acceleration
-
-        def calculate_bootstrap_statistics(data, statistic, n_resamples):
-            """
-            Performs bootstrap resampling and calculates the specified statistic.
-            """
-            return np.array(
-                [
-                    statistic(np.random.choice(data, size=n, replace=True))
-                    for _ in range(n_resamples)
-                ]
-            )
-
         # Bootstrap resampling
-        sample_statistics = calculate_bootstrap_statistics(data, statistic, n_resamples)
+        sample_statistics = self._bootstrap_statistics(data, statistic, n_resamples)
 
         # Jackknife resampling for acceleration
-        acceleration = generate_acceleration(data)
+        acceleration = self._jackknife_acceleration(data, statistic)
 
         # Bias correction
         observed_stat = statistic(data)
@@ -115,11 +127,11 @@ class BaseModel:
 
     def _statistic_generate(
         self,
-        df,
-        confidence_level,
-        statistic,
-        n_resamples,
-        random_state,
+        df: pd.DataFrame,
+        confidence_level: float,
+        statistic: Callable,
+        n_resamples: int,
+        random_state: int,
     ):
         """
         Calculate statistics for the reference distances, including confidence intervals and thresholds.
@@ -139,27 +151,37 @@ class BaseModel:
             "mean": estimated_mean,
         }
 
-    def _calculate_limit(self, estimated_mean, std_deviation, factor=3):
-        """Calculates the lower and upper limits based on the given factor."""
-        lower_limit = estimated_mean - (factor * std_deviation)
-        upper_limit = estimated_mean + (factor * std_deviation)
+    def _custom_threshold(
+        self, data: pd.Series, custom_func: Callable
+    ) -> Tuple[float, float]:
+        """Calculate thresholds using a custom function."""
+        return custom_func(data)
+
+    def _calculate_threshold(
+        self, data: pd.Series, center: Callable, spread: Callable, factor: float = 3
+    ) -> Tuple[float, float]:
+        """Calculate thresholds using a central tendency and spread function."""
+        center_value = center(data)
+        spread_value = spread(data)
+        lower_limit = center_value - factor * spread_value
+        upper_limit = center_value + factor * spread_value
         return lower_limit, upper_limit
 
-    def _deviation_threshold(self, df):
-        """Calculates thresholds using standard deviation."""
-        std_deviation = df["metric"].std()
-        estimated_mean = df["metric"].mean()
-        return self._calculate_limit(estimated_mean, std_deviation)
+    def _deviation_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
+        return self._calculate_threshold(df["metric"], np.mean, np.std)
 
-    def _mad_threshold(self, df):
-        """Calculates thresholds using Median Absolute Deviation (MAD)."""
-        mad_value = np.median(np.abs(df["metric"] - np.median(df["metric"])))
-        estimated_mean = df["metric"].mean()
-        return self._calculate_limit(estimated_mean, mad_value)
+    def _mad_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
+        mad = lambda x: np.median(np.abs(x - np.median(x)))
+        return self._calculate_threshold(df["metric"], np.mean, mad)
 
-    def _drift_limit_generate(self, statistics, distribution, drift_limit):
+    def _drift_limit_generate(
+        self,
+        statistics: Dict,
+        distribution: pd.DataFrame,
+        drift_limit: Union[str, Callable, Tuple[float]],
+    ):
         """
-        Determines the lower and upper drift limits based on different threshold methods.
+        Determines the drift limits based on the specified method.
         """
         if isinstance(drift_limit, str):
             if drift_limit == "deviation":
@@ -168,12 +190,14 @@ class BaseModel:
                 lower_limit, upper_limit = self._mad_threshold(distribution)
             else:
                 raise ValueError(f"Unsupported drift limit method: {drift_limit}")
+        elif callable(drift_limit):
+            lower_limit, upper_limit = self._custom_threshold(
+                distribution["metric"], drift_limit
+            )
         elif isinstance(drift_limit, tuple) and len(drift_limit) == 2:
             lower_limit, upper_limit = drift_limit
         else:
-            raise ValueError(
-                "Drift limit must be a string or a tuple with two elements."
-            )
+            raise ValueError("Invalid drift limit specification.")
 
         # Update the statistics dictionary with the new thresholds
         statistics["lower_limit"] = lower_limit
