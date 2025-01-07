@@ -92,7 +92,7 @@ class Plot:
 
         return fig.show(fig_type)
 
-    def diverging_bar_over_time(
+    def bar(
         self,
         analysis: pd.DataFrame,
         width: int = 800,
@@ -157,7 +157,7 @@ class Plot:
 
         return fig.show(fig_type)
 
-    def scatterplot_over_time(
+    def scatter(
         self,
         analysis: pd.DataFrame,
         width: int = 800,
