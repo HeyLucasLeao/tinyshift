@@ -18,7 +18,7 @@ class PerformanceTracker(BaseModel):
         confidence_level: float = 0.997,
         n_resamples: int = 1000,
         random_state: int = 42,
-        drift_limit: Union[str, Tuple[float, float]] = "deviation",
+        drift_limit: Union[str, Tuple[float, float]] = "stddev",
     ):
         """
         A tracker for monitoring model performance over time using a specified evaluation metric.
@@ -173,15 +173,6 @@ class PerformanceTracker(BaseModel):
         """
 
         self._validate_columns(analysis, target_col, datetime_col)
-
-        if target_col not in analysis.columns or prediction_col not in analysis.columns:
-            raise KeyError(
-                f"Columns {target_col} and/or {prediction_col} are not in the DataFrame."
-            )
-        if datetime_col not in analysis.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(analysis[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
 
         if analysis.empty:
             raise ValueError("Input DataFrame is empty.")
