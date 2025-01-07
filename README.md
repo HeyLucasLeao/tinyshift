@@ -66,9 +66,9 @@ print(analysis_score)
 ### 3. Visualization
 TinyShift also provides graphs to visualize the magnitude of drift and performance changes over time.
 ```python
-tracker.plot.scatterplot_over_time(analysis_score, fig_type="png")
+tracker.plot.scatter(analysis_score, fig_type="png")
 
-tracker.plot.diverging_bar_over_time(analysis_score, fig_type="png")
+tracker.plot.bar(analysis_score, fig_type="png")
 ```
 
 ## Project Structure
