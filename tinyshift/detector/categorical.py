@@ -24,7 +24,7 @@ class CategoricalDriftDetector(BaseModel):
         confidence_level: float = 0.997,
         n_resamples: int = 1000,
         random_state: int = 42,
-        drift_limit: Union[str, Tuple[float, float]] = "deviation",
+        drift_limit: Union[str, Tuple[float, float]] = "stddev",
     ):
         """
         A detector for identifying drift in categorical data over time. The detector uses

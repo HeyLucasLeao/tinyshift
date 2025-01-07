@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tinyshift"
-version = "0.0.2"
-description = "A small toolbox for MLOps"
+version = "0.0.3"
+description = "A small toolbox for mlops"
 license = {text = "MIT License"}
 authors = [
     {name = "Lucas Leão", email = "heylucasleao@gmail.com"}

@@ -168,7 +168,7 @@ class BaseModel:
 
         return self._calculate_threshold(df["metric"], np.median, iqr, factor=1.5)
 
-    def _deviation_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
+    def _stddev_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
         """Calculates thresholds using mean and standard deviation."""
         return self._calculate_threshold(df["metric"], np.mean, np.std)
 
@@ -187,8 +187,8 @@ class BaseModel:
         Determines the drift limits based on the specified method.
         """
         if isinstance(drift_limit, str):
-            if drift_limit == "deviation":
-                lower_limit, upper_limit = self._deviation_threshold(distribution)
+            if drift_limit == "stddev":
+                lower_limit, upper_limit = self._stddev_threshold(distribution)
             elif drift_limit == "mad":
                 lower_limit, upper_limit = self._mad_threshold(distribution)
             elif drift_limit == "iqr":
