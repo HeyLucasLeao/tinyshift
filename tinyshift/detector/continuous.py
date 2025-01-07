@@ -17,7 +17,7 @@ class ContinuousDriftDetector(BaseModel):
         confidence_level: float = 0.997,
         n_resamples: int = 1000,
         random_state: int = 42,
-        drift_limit: Union[str, Tuple[float, float]] = "deviation",
+        drift_limit: Union[str, Tuple[float, float]] = "stddev",
     ):
         """
         A detector for identifying drift in continuous data over time. The detector uses
@@ -34,6 +34,9 @@ class ContinuousDriftDetector(BaseModel):
             The name of the column containing datetime values for temporal grouping.
         period : str
             The frequency for grouping data (e.g., '1D' for daily, '1H' for hourly).
+        func : str, optional
+            The distance function to use ('ws' or 'ks').
+            Default is 'ws'.
         statistic : callable, optional
             The statistic function used to summarize the reference KS metrics.
             Default is `np.mean`.
