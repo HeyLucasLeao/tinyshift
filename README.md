@@ -27,6 +27,12 @@ cd tinyshift
 pip install .
 ```
 
+> **Note:** If you want to enable plotting capabilities, you need to install the extras using Poetry:
+
+```bash
+poetry install --all-extras
+```
+
 ## Usage
 Below are basic examples of how to use TinyShift's features.
 ### 1. Data Drift Detection
