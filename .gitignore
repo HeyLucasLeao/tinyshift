@@ -2,3 +2,7 @@
 *.txt
 *.gz
 *.whl
+*.egg-info
+*.egg
+*.log
+*.lock

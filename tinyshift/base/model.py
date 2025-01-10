@@ -173,9 +173,9 @@ class BaseModel:
         return self._calculate_threshold(df["metric"], np.mean, np.std)
 
     def _mad_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
-        """Calculates thresholds using mean and Median Absolute Deviation (MAD)."""
+        """Calculates thresholds using Median Absolute Deviation (MAD)."""
         mad = lambda x: np.median(np.abs(x - np.median(x)))
-        return self._calculate_threshold(df["metric"], np.mean, mad)
+        return self._calculate_threshold(df["metric"], np.median, mad)
 
     def _drift_limit_generate(
         self,

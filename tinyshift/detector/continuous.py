@@ -173,13 +173,15 @@ class ContinuousDriftDetector(BaseModel):
         n = p.shape[0]
         values = np.zeros(n)
         past_values = np.array([], dtype=float)
+        index = p.index[1:]
+        p = np.asarray(p)
 
         for i in range(1, n):
             past_values = np.concatenate([past_values, p[i - 1]])
             value = func(past_values, p[i])
             values[i] = value
 
-        return pd.DataFrame({"datetime": p.index[1:], "metric": values[1:]})
+        return pd.DataFrame({"datetime": index, "metric": values[1:]})
 
     def score(
         self,
@@ -208,7 +210,7 @@ class ContinuousDriftDetector(BaseModel):
 
         self._validate_columns(analysis, target_col, datetime_col)
 
-        reference = np.concatenate(self.reference_distribution)
+        reference = np.concatenate(np.asarray(self.reference_distribution))
         dist = self._calculate_distribution(
             analysis, target_col, datetime_col, self.period
         )
