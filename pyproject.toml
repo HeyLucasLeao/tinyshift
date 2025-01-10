@@ -1,26 +1,28 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "tinyshift"
 version = "0.0.3"
 description = "A small toolbox for mlops"
-license = {text = "MIT License"}
-authors = [
-    {name = "Lucas Leão", email = "heylucasleao@gmail.com"}
-]
-readme = {file = "README.md", content-type = "text/markdown"}
-dependencies = [
-    "pandas",
-    "scipy",
-    "plotly",
-    "scikit-learn",
-    "numpy",
-]
+license = "MIT"
+authors = ["Lucas Leão <heylucasleao@gmail.com>"]
+readme = "README.md"
 keywords = ["mlops", "toolbox", "machine-learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^2.1.0"
+venn-abers = "^1.4.6"
+scikit-learn = "^1.3.0"
+
+[tool.poetry.extras]
+kaleido = ["0.2.1"]
+nbformat = ["5.10.4"]
+plotly = ["5.22.0"]
