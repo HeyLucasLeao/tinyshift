@@ -1,25 +1,18 @@
 import numpy as np
 import pandas as pd
-from scipy.spatial.distance import jensenshannon
-from ..base.model import BaseModel
+from scipy.stats import ks_2samp, wasserstein_distance
+from .base import BaseModel
 from typing import Callable, Tuple, Union
 
 
-def l_infinity(a, b):
-    """
-    Compute the L-infinity distance between two distributions.
-    """
-    return np.max(np.abs(a - b))
-
-
-class CategoricalDriftDetector(BaseModel):
+class ContinuousDriftTracker(BaseModel):
     def __init__(
         self,
         reference: pd.DataFrame,
         target_col: str,
         datetime_col: str,
         period: str,
-        func: str = "l_infinity",
+        func: str = "ws",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
         n_resamples: int = 1000,
@@ -27,25 +20,25 @@ class CategoricalDriftDetector(BaseModel):
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
     ):
         """
-        A detector for identifying drift in categorical data over time. The detector uses
+        A Tracker for identifying drift in continuous data over time. The Tracker uses
         a reference dataset to compute a baseline distribution and compare subsequent data
-        for deviations based on a distance metric and drift limits.
+        for deviations using the Kolmogorov-Smirnov test and statistical thresholds.
 
         Parameters:
         ----------
         reference : DataFrame
             The reference dataset used to compute the baseline distribution.
         target_col : str
-            The name of the column containing the categorical variable to analyze.
+            The name of the column containing the continuous variable to analyze.
         datetime_col : str
             The name of the column containing datetime values for temporal grouping.
         period : str
-            The frequency for grouping data (e.g., 'D' for daily, 'M' for monthly).
+            The frequency for grouping data (e.g., '1D' for daily, '1H' for hourly).
         func : str, optional
-            The distance function to use ('l_infinity' or 'jensenshannon').
-            Default is 'l_infinity'.
+            The distance function to use ('ws' or 'ks').
+            Default is 'ws'.
         statistic : callable, optional
-            The statistic function used to summarize the reference distances.
+            The statistic function used to summarize the reference KS metrics.
             Default is `np.mean`.
         confidence_level : float, optional
             The confidence level for calculating statistical thresholds.
@@ -56,18 +49,18 @@ class CategoricalDriftDetector(BaseModel):
         random_state : int, optional
             Seed for reproducibility of random resampling.
             Default is 42.
-        drift_limit : tuple, optional
+        thresholds : tuple, optional
             User-defined thresholds for drift detection.
-            Default is the 'deviation method'.
+            Default is an empty tuple.
 
         Attributes:
         ----------
         period : str
             The grouping frequency used for analysis.
-        reference_frequency : DataFrame
-            The frequency distribution of the reference dataset.
-        reference_distance : DataFrame
-            The distance metric values for the reference dataset.
+        reference_distribution : Series
+            The distribution of the reference dataset grouped by the specified period.
+        reference_ks : DataFrame
+            The Kolmogorov-Smirnov test results for the reference dataset.
         statistics : dict
             Statistical thresholds and summary statistics for drift detection.
         plot : Plot
@@ -78,9 +71,10 @@ class CategoricalDriftDetector(BaseModel):
         self._validate_params(confidence_level, n_resamples, period)
 
         self.period = period
-        self.func = self._selection_function(func)
+        self.func = func
 
-        self.reference_frequency = self._calculate_frequency(
+        # Initialize frequency and statistics
+        self.reference_distribution = self._calculate_distribution(
             reference,
             target_col,
             datetime_col,
@@ -88,7 +82,7 @@ class CategoricalDriftDetector(BaseModel):
         )
 
         self.reference_distance = self._generate_distance(
-            self.reference_frequency,
+            self.reference_distribution, func
         )
 
         super().__init__(
@@ -100,85 +94,94 @@ class CategoricalDriftDetector(BaseModel):
             drift_limit,
         )
 
-    def _calculate_frequency(
+    def _calculate_distribution(
         self,
         df: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
+        column_name: str,
+        timestamp: str,
         period: str,
-    ) -> pd.DataFrame:
+    ) -> pd.Series:
         """
-        Calculate the frequency distribution of the target column grouped by a time period.
+        Calculate the continuous distribution of a target column grouped by a given period.
 
         Parameters:
         ----------
-        df : DataFrame
+        df : pd.DataFrame
             The dataset to analyze.
-        target_col : str
-            The name of the categorical column.
-        datetime_col : str
+        column_name : str
+            The name of the column containing the continuous variable.
+        timestamp : str
             The name of the datetime column for temporal grouping.
         period : str
-            The frequency for grouping (e.g., 'D', 'M').
+            The frequency for grouping (e.g., '1D', '1H').
 
         Returns:
         -------
-        DataFrame
-            A pivot table of frequencies with time periods as rows and categorical
-            values as columns.
+        pd.Series
+            A Pandas Series where each index corresponds to a time period, and each value is
+            a list of continuous values for that period.
         """
-        freq = (
-            df.groupby([pd.Grouper(key=datetime_col, freq=period), target_col])
-            .size()
-            .unstack(fill_value=0)
+        return (
+            df[[timestamp, column_name]]
+            .copy()
+            .groupby(pd.Grouper(key=timestamp, freq=period))[column_name]
+            .agg(list)
         )
 
-        return freq
+    def _ks(self, a, b):
+        """Calculate the Kolmogorov-Smirnov test and return the p_value."""
+        _, p_value = ks_2samp(a, b)
+        return p_value
+
+    def _wasserstein(self, a, b):
+        """Calculate the Wasserstein Distance."""
+        return wasserstein_distance(a, b)
 
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
 
-        if func_name == "l_infinity":
-            selected_func = l_infinity
-        elif func_name == "jensenshannon":
-            selected_func = jensenshannon
+        if func_name == "ws":
+            selected_func = self._wasserstein
+        elif func_name == "ks":
+            selected_func = self._ks
         else:
-            raise ValueError(f"Unsupported distance function: {func_name}")
+            raise ValueError(f"Unsupported function: {func_name}")
         return selected_func
 
     def _generate_distance(
         self,
-        p: pd.DataFrame,
+        p: pd.Series,
+        func_name: Callable,
     ) -> pd.DataFrame:
         """
-        Compute a distance metric between consecutive periods in the frequency distribution.
+        Calculate the Kolmogorov-Smirnov test metric over a rolling cumulative window.
 
         Parameters:
         ----------
-        p : DataFrame
-            The frequency distribution with time periods as rows and categorical values as columns.
-        func : str
-            The distance function to use ('l_infinity' or 'jensenshannon').
+        p : Series
+            A Pandas Series where each element is a list representing the distribution
+            of values for a specific period.
 
         Returns:
         -------
         DataFrame
-            A DataFrame containing datetime values and the calculated distances.
+            A DataFrame containing datetime indices and the calculated KS test metric
+            for each period.
         """
+        func = self._selection_function(func_name)
+
         n = p.shape[0]
-        distances = np.zeros(n)
-        past_value = np.zeros(p.shape[1], dtype=np.int32)
+        values = np.zeros(n)
+        past_values = np.array([], dtype=float)
         index = p.index[1:]
         p = np.asarray(p)
 
         for i in range(1, n):
-            past_value = past_value + p[i - 1]
-            past_value = past_value / np.sum(past_value)
-            current_value = p[i] / np.sum(p[i])
-            dist = self.func(past_value, current_value)
-            distances[i] = dist
+            past_values = np.concatenate([past_values, p[i - 1]])
+            value = func(past_values, p[i])
+            values[i] = value
 
-        return pd.DataFrame({"datetime": index, "metric": distances[1:]})
+        return pd.DataFrame({"datetime": index, "metric": values[1:]})
 
     def score(
         self,
@@ -194,33 +197,31 @@ class CategoricalDriftDetector(BaseModel):
         analysis : DataFrame
             The dataset to analyze for drift.
         target_col : str
-            The name of the categorical column in the analysis dataset.
+            The name of the continuous column in the analysis dataset.
         datetime_col : str
             The name of the datetime column in the analysis dataset.
 
         Returns:
         -------
         DataFrame
-            A DataFrame containing metrics and drift detection results for each time period.
+            A DataFrame containing datetime values, drift metrics, and a boolean
+            indicating whether drift was detected for each time period.
         """
+
         self._validate_columns(analysis, target_col, datetime_col)
 
-        # Calculate frequency and percentage distribution
-        freq = self._calculate_frequency(
+        reference = np.concatenate(np.asarray(self.reference_distribution))
+        dist = self._calculate_distribution(
             analysis, target_col, datetime_col, self.period
         )
-        percent = freq.div(freq.sum(axis=1), axis=0)
 
-        # Calculate percentage distribution
-        ref_freq = self.reference_frequency.sum(axis=0)
-        ref_dist = ref_freq / np.sum(ref_freq)
-
-        # Calculate drift metrics for each time period
-        metrics = (
-            percent.apply(lambda row: self.func(row, ref_dist), axis=1)
-            .rename("metric")
-            .reset_index()
+        func = self._selection_function(self.func)
+        metrics = np.array([func(reference, row) for row in dist])
+        metrics = pd.DataFrame(
+            {
+                "datetime": dist.index,
+                "metric": metrics,
+            },
         )
         metrics["is_drifted"] = self._is_drifted(metrics)
-
         return metrics
