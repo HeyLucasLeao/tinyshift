@@ -167,14 +167,32 @@ class Plot:
         """
         Generate a time-series plot showing the metric performance with confidence interval and thresholds.
         """
+
         fig = go.Figure()
 
         fig.add_trace(
             go.Scatter(
                 x=analysis["datetime"],
                 y=analysis["metric"],
-                mode="lines+markers",
+                mode="markers",
                 name="Metric",
+                marker=dict(
+                    color=[
+                        (
+                            "firebrick"
+                            if (
+                                self.statistics.get("upper_limit") is not None
+                                and y > self.statistics["upper_limit"]
+                            )
+                            or (
+                                self.statistics.get("lower_limit") is not None
+                                and y < self.statistics["lower_limit"]
+                            )
+                            else "#1f77b4"
+                        )
+                        for y in analysis["metric"]
+                    ]
+                ),
             )
         )
 
