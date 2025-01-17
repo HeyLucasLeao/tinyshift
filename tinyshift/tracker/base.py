@@ -14,6 +14,7 @@ class BaseModel:
         n_resamples: int,
         random_state: int,
         drift_limit: Union[str, Tuple[float, float]],
+        enable_confidence_interval: bool,
     ):
         """
         Initializes the BaseModel class with reference distribution, statistics, and drift limits.
@@ -34,6 +35,7 @@ class BaseModel:
             Method ("deviation" or "mad") or custom limits for drift thresholding.
         """
 
+        self.enable_confidence_interval = enable_confidence_interval
         self.statistics = self._statistic_generate(
             reference,
             confidence_level,
@@ -41,7 +43,9 @@ class BaseModel:
             n_resamples,
             random_state,
         )
-        self.plot = plot.Plot(self.statistics, reference)
+        self.plot = plot.Plot(
+            self.statistics, reference, self.enable_confidence_interval
+        )
         self._drift_limit_generate(self.statistics, reference, drift_limit)
 
     def _jackknife_acceleration(self, data: np.ndarray, statistic: Callable) -> float:
@@ -126,13 +130,16 @@ class BaseModel:
         """
         Calculate statistics for the reference distances, including confidence intervals and thresholds.
         """
-        ci_lower, ci_upper = self._bootstrapping_bca(
-            df["metric"],
-            confidence_level,
-            statistic,
-            n_resamples,
-            random_state,
-        )
+        if self.enable_confidence_interval:
+            ci_lower, ci_upper = self._bootstrapping_bca(
+                df["metric"],
+                confidence_level,
+                statistic,
+                n_resamples,
+                random_state,
+            )
+        else:
+            ci_lower, ci_upper = None, None
         estimated_mean = np.mean(df["metric"])
 
         return {

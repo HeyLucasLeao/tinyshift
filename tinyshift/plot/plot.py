@@ -6,7 +6,8 @@ import pandas as pd
 
 
 class Plot:
-    def __init__(self, statistics, distribution):
+    def __init__(self, statistics, distribution, enable_confidence_interval):
+        self.enable_confidence_interval = enable_confidence_interval
         self.statistics = statistics
         self.distribution = distribution
 
@@ -110,7 +111,7 @@ class Plot:
 
         fig.add_trace(
             go.Bar(
-                x=analysis["datetime"],
+                x=analysis.get("datetime"),
                 y=positive_bars,
                 base=[reference_line] * len(positive_bars),
                 name="Above Reference",
@@ -123,7 +124,7 @@ class Plot:
 
         fig.add_trace(
             go.Bar(
-                x=analysis["datetime"],
+                x=analysis.get("datetime"),
                 y=negative_bars,
                 base=reference_line - negative_bars,
                 name="Below Reference",
@@ -133,15 +134,15 @@ class Plot:
                 opacity=0.7,
             )
         )
-
-        fig.add_hrect(
-            y0=self.statistics["ci_lower"],
-            y1=self.statistics["ci_upper"],
-            line_width=0,
-            fillcolor="lightblue",
-            opacity=0.5,
-            name="Fixed Confidence Interval",
-        )
+        if self.enable_confidence_interval:
+            fig.add_hrect(
+                y0=self.statistics.get("ci_lower"),
+                y1=self.statistics.get("ci_upper"),
+                line_width=0,
+                fillcolor="lightblue",
+                opacity=0.5,
+                name="Fixed Confidence Interval",
+            )
 
         self._add_limits(fig)
 
@@ -167,36 +168,48 @@ class Plot:
         """
         Generate a time-series plot showing the metric performance with confidence interval and thresholds.
         """
+
+        upper_limit = self.statistics.get("upper_limit")
+        lower_limit = self.statistics.get("lower_limit")
+
+        def marker_color(y):
+            if (upper_limit is not None and y > upper_limit) or (
+                lower_limit is not None and y < lower_limit
+            ):
+                return "firebrick"
+            return "#1f77b4"
+
         fig = go.Figure()
 
         fig.add_trace(
             go.Scatter(
-                x=analysis["datetime"],
+                x=analysis.get("datetime"),
                 y=analysis["metric"],
-                mode="lines+markers",
+                mode="markers",
                 name="Metric",
+                marker=dict(color=[marker_color(y) for y in analysis["metric"]]),
             )
         )
 
-        # Confidence interval shading
-        fig.add_trace(
-            go.Scatter(
-                x=analysis["datetime"],
-                y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
-                fill="toself",
-                fillcolor="rgba(0, 100, 255, 0.2)",
-                line=dict(color="rgba(255,255,255,0)"),
-                name="Fixed Confidence Interval",
+        if self.enable_confidence_interval:
+            fig.add_trace(
+                go.Scatter(
+                    x=analysis.get("datetime"),
+                    y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
+                    fill="toself",
+                    fillcolor="rgba(0, 100, 255, 0.2)",
+                    line=dict(color="rgba(255,255,255,0)"),
+                    name="Fixed Confidence Interval",
+                )
             )
-        )
 
-        fig.add_hrect(
-            y0=self.statistics["ci_lower"],
-            y1=self.statistics["ci_upper"],
-            line_width=0,
-            fillcolor="lightblue",
-            opacity=0.5,
-        )
+            fig.add_hrect(
+                y0=self.statistics["ci_lower"],
+                y1=self.statistics["ci_upper"],
+                line_width=0,
+                fillcolor="lightblue",
+                opacity=0.5,
+            )
 
         self._add_limits(fig)
 

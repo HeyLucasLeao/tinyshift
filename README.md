@@ -83,22 +83,29 @@ The basic structure of the project is as follows:
 tinyshift
 ├── LICENSE
 ├── README.md
-├── example.ipynb
+├── poetry.lock
 ├── pyproject.toml
 └── tinyshift
-    ├── base
+    ├── examples
+    │   ├── outlier.ipynb
+    │   └── tracker.ipynb
+    ├── outlier
     │   ├── __init__.py
-    │   └── model.py
-    ├── detector
-    │   ├── __init__.py
-    │   ├── categorical.py
-    │   └── continuous.py
+    │   ├── base.py
+    │   ├── hbos.py
+    │   └── spad.py
     ├── plot
     │   ├── __init__.py
     │   └── plot.py
+    ├── tests
+    │   ├── test_hbos.py
+    │   └── test_spad.py
     └── tracker
-        ├── __init__.py
-        └── performance.py          
+        ├── anomaly.py
+        ├── base.py
+        ├── categorical.py
+        ├── continuous.py
+        └── performance.py      
 ```
 
 ### License

@@ -25,6 +25,7 @@ class CategoricalDriftTracker(BaseModel):
         n_resamples: int = 1000,
         random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
+        enable_confidence_interval: bool = False,
     ):
         """
         A tracker for identifying drift in categorical data over time. The tracker uses
@@ -98,6 +99,7 @@ class CategoricalDriftTracker(BaseModel):
             n_resamples,
             random_state,
             drift_limit,
+            enable_confidence_interval,
         )
 
     def _calculate_frequency(
