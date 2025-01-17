@@ -8,38 +8,46 @@ from typing import Union
 
 
 class SPAD(BaseHistogramModel):
+    """
+    SPAD (Statistical Probability Anomaly Detection) detects outliers by discretizing continuous data into bins and calculating anomaly scores based on the logarithm of inverse probabilities for each feature.
+
+    SPAD+ enhances SPAD by incorporating Principal Components (PCs) from PCA, capturing feature correlations to detect multivariate anomalies (Type II Anomalies). The final score combines contributions from original features and PCs.
+
+    Parameters
+    ----------
+    plus : bool, optional
+        If True, applies PCA and concatenates transformed features. Default is False.
+
+    Attributes
+    ----------
+    pca_model : PCA or None
+        PCA model for dimensionality reduction if `plus` is True.
+    plus : bool
+        Indicates whether PCA is applied.
+    dtypes : np.ndarray
+        Data types of input features.
+    columns : Index
+        Column names of the input data (if a pandas DataFrame).
+    n_features : int
+        Number of input features.
+    dist_ : list
+        Feature distributions (relative frequencies for categorical or probabilities and bin edges for continuous features).
+    decision_scores_ : np.ndarray
+        Computed anomaly scores for input data.
+
+    References
+    ----------
+    Aryal, Sunil & Ting, Kai & Haffari, Gholamreza. (2016). Revisiting Attribute Independence Assumption in Probabilistic Unsupervised Anomaly Detection.
+    https://www.researchgate.net/publication/301610958_Revisiting_Attribute_Independence_Assumption_in_Probabilistic_Unsupervised_Anomaly_Detection
+
+    Aryal, Sunil & Agrahari Baniya, Arbind & Santosh, Kc. (2019). Improved histogram-based anomaly detector with the extended principal component features.
+    https://www.researchgate.net/publication/336132587_Improved_histogram-based_anomaly_detector_with_the_extended_principal_component_features
+    """
 
     def __init__(self, plus=False):
         self.pca_model = None
         self.plus = plus
         super().__init__()
-
-    def _check_bins(self, X: np.ndarray, nbins: Union[int, str]) -> int:
-        """
-        Valida e determina o número de bins para construção do histograma.
-
-        Parâmetros:
-        -----------
-        X : array-like, shape (n_samples,)
-            Dados de entrada para uma única característica.
-
-        nbins : int ou str
-            Número de bins ou uma estratégia válida de binning.
-
-        Retorno:
-        --------
-        int
-            Número de bins a ser usado.
-        """
-        if isinstance(nbins, int) and nbins > 0:
-            return nbins
-        elif isinstance(nbins, str):
-            bin_edges = np.histogram_bin_edges(X, bins=nbins)
-            return len(bin_edges) - 1
-        else:
-            raise ValueError(
-                "nbins deve ser um número inteiro positivo ou uma estratégia válida de binning."
-            )
 
     def fit(
         self,
@@ -48,20 +56,26 @@ class SPAD(BaseHistogramModel):
         random_state: int = 42,
     ) -> "SPAD":
         """
-        Treina o modelo Histogram aprendendo as distribuições das características.
-
-        Parâmetros:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Dados de entrada contendo características categóricas e/ou contínuas.
-
-        nbins : int ou str, padrão=10
-            Número de bins para discretização ou uma estratégia válida de binning.
-
-        Retorno:
-        --------
-        self : object
-            A instância do modelo ajustado.
+        Fit the SPAD model to the data.
+        Parameters
+        ----------
+        X : np.ndarray
+            The input data to fit. Can be a numpy array, pandas Series, or pandas DataFrame.
+        nbins : Union[int, str], optional
+            The number of bins to use for discretizing continuous features. Default is 5.
+        random_state : int, optional
+            The random seed for reproducibility. Default is 42.
+        Returns
+        -------
+        SPAD
+            The fitted SPAD model.
+        Notes
+        -----
+        - If `X` is a pandas Series or DataFrame, the data types and column names are stored.
+        - If `self.plus` is True, PCA is applied to the data and the transformed features are concatenated. (SPAD+)
+        - For categorical features, relative frequencies are computed using Laplace smoothing.
+        - For continuous features, the data is discretized into bins and probabilities are computed.
+        - The decision scores are computed and stored in `self.decision_scores_`.
         """
         if isinstance(X, (pd.Series, pd.DataFrame)):
             self.dtypes = np.asarray(X.dtypes)
@@ -105,21 +119,19 @@ class SPAD(BaseHistogramModel):
 
     def _compute_outlier_score(self, X: np.ndarray, i: int) -> np.ndarray:
         """
-        Calcula a densidade (probabilidade) de cada amostra de acordo com a distribuição da característica.
-
-        Parâmetros:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Dados de entrada.
-
+        Compute the outlier score for a given feature column in the dataset.
+        Parameters
+        ----------
+        X : np.ndarray
+            The input data array.
         i : int
-            Índice da característica a ser processada.
-
-        Retorno:
-        --------
-        density : np.ndarray
-            Densidade calculada para a característica i.
+            The index of the feature column for which to compute the outlier score.
+        Returns
+        -------
+        np.ndarray
+            An array of outlier scores for the specified feature column.
         """
+
         if isinstance(self.dtypes[i], pd.CategoricalDtype):
             density = np.array([self.dist_[i].get(value, 1e-9) for value in X[:, i]])
         else:
@@ -132,18 +144,19 @@ class SPAD(BaseHistogramModel):
 
     def _decision_function(self, X: np.ndarray) -> np.ndarray:
         """
-        Calcula o score de anomalia para cada instância no conjunto de dados.
-
-        Parâmetros:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Conjunto de dados a ser avaliado quanto a anomalias.
-
-        Retorno:
-        --------
-        scores : array, shape (n_samples,)
-            Scores de anomalia para o conjunto de dados. Scores maiores indicam maior probabilidade de serem outliers.
+        Compute the decision function for the input data X.
+        This function calculates the outlier scores for each feature in the input
+        data and returns the sum of these scores for each sample.
+        Parameters
+        ----------
+        X : np.ndarray
+            The input data array of shape (n_samples, n_features).
+        Returns
+        -------
+        np.ndarray
+            The computed outlier scores for each sample, as a 1D array of shape (n_samples,).
         """
+
         X = check_array(X)
         outlier_scores = np.zeros(shape=(X.shape[0], self.n_features))
 
@@ -154,18 +167,17 @@ class SPAD(BaseHistogramModel):
 
     def decision_function(self, X: np.ndarray) -> np.ndarray:
         """
-        Calcula o score de anomalia para um conjunto de dados, considerando a transformação PCA se `plus=True`.
-
-        Parâmetros:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Conjunto de dados a ser avaliado quanto a anomalias.
-
-        Retorno:
-        --------
-        scores : array, shape (n_samples,)
-            Scores de anomalia para o conjunto de dados.
+        Compute the decision function for the input data.
+        Parameters
+        ----------
+        X : np.ndarray
+            Input data array.
+        Returns
+        -------
+        np.ndarray
+            Decision function values for the input data.
         """
+
         self._check_columns(X)
 
         X = check_array(X)

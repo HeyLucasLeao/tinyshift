@@ -22,6 +22,10 @@ class HBOS(BaseHistogramModel):
         Calculates the outlier score for a specific feature.
     decision_function(X: np.ndarray) -> np.ndarray:
         Calculates the outlier score for each instance in the dataset.
+    References
+    ----------
+    Goldstein, Markus & Dengel, Andreas. (2012). Histogram-based Outlier Score (HBOS): A fast Unsupervised Anomaly Detection Algorithm.
+    https://www.researchgate.net/publication/231614824_Histogram-based_Outlier_Score_HBOS_A_fast_Unsupervised_Anomaly_Detection_Algorithm
     """
 
     def __init__(self):
