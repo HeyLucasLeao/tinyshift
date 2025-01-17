@@ -49,9 +49,7 @@ class HBOS(BaseHistogramModel):
         - For continuous features, the data is discretized into bins and densities are computed.
         - The decision scores are computed and stored in `self.decision_scores_`.
         """
-        if isinstance(X, (pd.Series, pd.DataFrame)):
-            self.feature_dtypes = np.asarray(X.dtypes)
-            self.feature_names = X.columns
+        self._extract_feature_info(X)
 
         X = check_array(X)
         _, self.n_features = X.shape
@@ -105,7 +103,6 @@ class HBOS(BaseHistogramModel):
         X = check_array(X)
         outlier_scores = np.zeros(shape=(X.shape[0], self.n_features))
 
-        # Calcula o score de anomalia para cada característica
         for i in range(self.n_features):
             outlier_scores[:, i] = self._compute_outlier_score(X, i)
 

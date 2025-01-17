@@ -80,3 +80,35 @@ class BaseHistogramModel:
                 raise ValueError(
                     "The columns of the input data do not match the columns of the training data."
                 )
+
+    def _extract_feature_info(self, X: Union[pd.Series, pd.DataFrame]):
+        """
+        Extract feature information from the input data.
+
+        Parameters:
+        -----------
+        X : Union[pd.Series, pd.DataFrame]
+            The input data from which to extract feature information.
+
+        Raises:
+        -------
+        TypeError
+            If the input data is not a pandas Series or DataFrame.
+        """
+        if isinstance(X, pd.DataFrame):
+            self.feature_names = X.columns.tolist()
+            self.feature_dtypes = X.dtypes.values
+        elif isinstance(X, pd.Series):
+            self.feature_names = [X.name] if X.name else ["feature_0"]
+            self.feature_dtypes = [X.dtype]
+        elif isinstance(X, np.ndarray):
+            if X.ndim == 1:
+                self.feature_names = ["feature_0"]
+                self.feature_dtypes = [X.dtype]
+            else:
+                self.feature_names = [f"feature_{i}" for i in range(X.shape[1])]
+                self.feature_dtypes = np.repeat(X.dtype, X.shape[1])
+        else:
+            raise TypeError(
+                "Input data must be a pandas Series, DataFrame, or numpy ndarray."
+            )
