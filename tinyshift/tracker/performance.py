@@ -19,6 +19,7 @@ class PerformanceTracker(BaseModel):
         n_resamples: int = 1000,
         random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
+        enable_confidence_interval: bool = False,
     ):
         """
         A tracker for monitoring model performance over time using a specified evaluation metric.
@@ -101,6 +102,7 @@ class PerformanceTracker(BaseModel):
             n_resamples,
             random_state,
             drift_limit,
+            enable_confidence_interval,
         )
 
     def _calculate_metric(

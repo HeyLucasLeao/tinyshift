@@ -6,7 +6,8 @@ import pandas as pd
 
 
 class Plot:
-    def __init__(self, statistics, distribution):
+    def __init__(self, statistics, distribution, enable_confidence_interval):
+        self.enable_confidence_interval = enable_confidence_interval
         self.statistics = statistics
         self.distribution = distribution
 
@@ -133,15 +134,15 @@ class Plot:
                 opacity=0.7,
             )
         )
-
-        fig.add_hrect(
-            y0=self.statistics["ci_lower"],
-            y1=self.statistics["ci_upper"],
-            line_width=0,
-            fillcolor="lightblue",
-            opacity=0.5,
-            name="Fixed Confidence Interval",
-        )
+        if self.enable_confidence_interval:
+            fig.add_hrect(
+                y0=self.statistics.get("ci_lower"),
+                y1=self.statistics.get("ci_upper"),
+                line_width=0,
+                fillcolor="lightblue",
+                opacity=0.5,
+                name="Fixed Confidence Interval",
+            )
 
         self._add_limits(fig)
 
@@ -190,25 +191,25 @@ class Plot:
             )
         )
 
-        # Confidence interval shading
-        fig.add_trace(
-            go.Scatter(
-                x=analysis.get("datetime"),
-                y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
-                fill="toself",
-                fillcolor="rgba(0, 100, 255, 0.2)",
-                line=dict(color="rgba(255,255,255,0)"),
-                name="Fixed Confidence Interval",
+        if self.enable_confidence_interval:
+            fig.add_trace(
+                go.Scatter(
+                    x=analysis.get("datetime"),
+                    y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
+                    fill="toself",
+                    fillcolor="rgba(0, 100, 255, 0.2)",
+                    line=dict(color="rgba(255,255,255,0)"),
+                    name="Fixed Confidence Interval",
+                )
             )
-        )
 
-        fig.add_hrect(
-            y0=self.statistics["ci_lower"],
-            y1=self.statistics["ci_upper"],
-            line_width=0,
-            fillcolor="lightblue",
-            opacity=0.5,
-        )
+            fig.add_hrect(
+                y0=self.statistics["ci_lower"],
+                y1=self.statistics["ci_upper"],
+                line_width=0,
+                fillcolor="lightblue",
+                opacity=0.5,
+            )
 
         self._add_limits(fig)
 
