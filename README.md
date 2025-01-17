@@ -77,6 +77,39 @@ tracker.plot.scatter(analysis_score, fig_type="png")
 tracker.plot.bar(analysis_score, fig_type="png")
 ```
 
+### 4. Outlier Detection
+To detect outliers in your dataset, you can use the models provided by TinyShift. Currently, it offers the Histogram-Based Outlier Score (HBOS), Simple Probabilistic Anomaly Detector (SPAD), and SPAD+.
+
+```python
+from tinyshift.outlier import SPAD
+
+df = pd.read_csv('data.csv')
+
+spad_plus = SPAD(plus=True)
+spad_plus.fit(df)
+
+anomaly_scores = spad_plus.decision_function(df)
+
+print(anomaly_scores)
+```
+### 5. Anomaly Tracker
+The Anomaly Tracker in TinyShift allows you to identify potential outliers based on the drift limit and anomaly scores generated during training. By setting a drift limit, the tracker can flag data points that exceed this threshold as possible outliers.
+
+```python
+from tinyshift.tracker import AnomalyTracker
+
+model = load_model('model.pkl') 
+
+tracker = AnomalyTracker(model, drift_limit='mad')
+
+df_analysis = pd.read_csv('analysis.csv')
+
+outliers = tracker.score(df_analysis)
+
+print(outliers)
+```
+In this example, the `AnomalyTracker` is initialized with a reference model and a specified drift limit. The `score` method evaluates the analysis dataset, calculating anomaly scores and flagging data points that exceed the drift limit as potential outliers.
+
 ## Project Structure
 The basic structure of the project is as follows:
 ```
