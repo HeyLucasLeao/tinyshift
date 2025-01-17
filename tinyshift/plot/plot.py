@@ -168,6 +168,16 @@ class Plot:
         Generate a time-series plot showing the metric performance with confidence interval and thresholds.
         """
 
+        upper_limit = self.statistics.get("upper_limit")
+        lower_limit = self.statistics.get("lower_limit")
+
+        def marker_color(y):
+            if (upper_limit is not None and y > upper_limit) or (
+                lower_limit is not None and y < lower_limit
+            ):
+                return "firebrick"
+            return "#1f77b4"
+
         fig = go.Figure()
 
         fig.add_trace(
@@ -176,23 +186,7 @@ class Plot:
                 y=analysis["metric"],
                 mode="markers",
                 name="Metric",
-                marker=dict(
-                    color=[
-                        (
-                            "firebrick"
-                            if (
-                                self.statistics.get("upper_limit") is not None
-                                and y > self.statistics["upper_limit"]
-                            )
-                            or (
-                                self.statistics.get("lower_limit") is not None
-                                and y < self.statistics["lower_limit"]
-                            )
-                            else "#1f77b4"
-                        )
-                        for y in analysis["metric"]
-                    ]
-                ),
+                marker=dict(color=[marker_color(y) for y in analysis["metric"]]),
             )
         )
 
