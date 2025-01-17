@@ -11,13 +11,13 @@ class BaseHistogramModel:
     n_features : int or None
         Number of features in the dataset.
 
-    dtypes : list or None
+    feature_dtypes : list or None
         Data types of the features.
 
-    columns : list
+    feature_names : list
         List of column names.
 
-    dist_ : list
+    feature_distributions : list
         List of distributions for each feature. Each distribution can be a dictionary or a list of numpy arrays.
 
     decision_scores_ : array-like or None
@@ -26,9 +26,9 @@ class BaseHistogramModel:
 
     def __init__(self):
         self.n_features = None
-        self.dtypes = None
-        self.columns = []
-        self.dist_: List[Union[Dict, List[np.ndarray]]] = []
+        self.feature_names = None
+        self.feature_dtypes = []
+        self.feature_distributions: List[Union[Dict, List[np.ndarray]]] = []
         self.decision_scores_ = None
 
     def _check_bins(self, X: np.ndarray, nbins: Union[int, str]) -> int:
@@ -76,7 +76,7 @@ class BaseHistogramModel:
             If the columns of the input data do not match the columns of the training data.
         """
         if isinstance(X, pd.DataFrame):
-            if not all(X.columns == self.columns):
+            if not all(X.columns == self.feature_names):
                 raise ValueError(
                     "The columns of the input data do not match the columns of the training data."
                 )

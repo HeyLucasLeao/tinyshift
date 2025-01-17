@@ -24,16 +24,6 @@ class SPAD(BaseHistogramModel):
         PCA model for dimensionality reduction if `plus` is True.
     plus : bool
         Indicates whether PCA is applied.
-    dtypes : np.ndarray
-        Data types of input features.
-    columns : Index
-        Column names of the input data (if a pandas DataFrame).
-    n_features : int
-        Number of input features.
-    dist_ : list
-        Feature distributions (relative frequencies for categorical or probabilities and bin edges for continuous features).
-    decision_scores_ : np.ndarray
-        Computed anomaly scores for input data.
 
     References
     ----------
@@ -78,8 +68,8 @@ class SPAD(BaseHistogramModel):
         - The decision scores are computed and stored in `self.decision_scores_`.
         """
         if isinstance(X, (pd.Series, pd.DataFrame)):
-            self.dtypes = np.asarray(X.dtypes)
-            self.columns = X.columns
+            self.feature_dtypes = np.asarray(X.dtypes)
+            self.feature_names = X.columns
 
         X = check_array(X)
 
@@ -87,8 +77,8 @@ class SPAD(BaseHistogramModel):
             self.pca_model = PCA(random_state=random_state)
             self.pca_model = self.pca_model.fit(X)
             X = np.concatenate((X, self.pca_model.transform(X)), axis=1)
-            self.dtypes = np.concatenate(
-                (self.dtypes, np.array([np.float64] * len(self.dtypes)))
+            self.feature_dtypes = np.concatenate(
+                (self.feature_dtypes, np.array([np.float64] * len(self.feature_dtypes)))
             )
 
         _, self.n_features = X.shape
@@ -96,13 +86,14 @@ class SPAD(BaseHistogramModel):
         for i in range(self.n_features):
             nbins = self._check_bins(X[:, i], nbins)
 
-            if isinstance(self.dtypes[i], pd.CategoricalDtype):
-                counts = Counter(X[:, i])
-                total_count = sum(counts.values())
-                relative_freq = {
-                    k: (v + 1) / (total_count + len(counts)) for k, v in counts.items()
+            if isinstance(self.feature_dtypes[i], pd.CategoricalDtype):
+                value_counts = Counter(X[:, i])
+                total_values = sum(value_counts.values())
+                relative_frequencies = {
+                    value: (count + 1) / (total_values + len(value_counts))
+                    for value, count in value_counts.items()
                 }
-                self.dist_.append(relative_freq)
+                self.feature_distributions.append(relative_frequencies)
             else:
                 mean = np.mean(X[:, i])
                 std = np.std(X[:, i])
@@ -112,49 +103,31 @@ class SPAD(BaseHistogramModel):
                 digitized = np.digitize(X[:, i], bin_edges, right=True)
                 unique_bins, counts = np.unique(digitized, return_counts=True)
                 probabilities = (counts + 1) / (np.sum(counts) + len(unique_bins))
-                self.dist_.append([probabilities, bin_edges])
+                self.feature_distributions.append([probabilities, bin_edges])
 
-        self.decision_scores_ = self._decision_function(X)
+        self.decision_scores_ = self._compute_decision_scores(X)
         return self
 
     def _compute_outlier_score(self, X: np.ndarray, i: int) -> np.ndarray:
         """
-        Compute the outlier score for a given feature column in the dataset.
-        Parameters
-        ----------
-        X : np.ndarray
-            The input data array.
-        i : int
-            The index of the feature column for which to compute the outlier score.
-        Returns
-        -------
-        np.ndarray
-            An array of outlier scores for the specified feature column.
+        Compute the outlier score for a specific feature column.
         """
 
-        if isinstance(self.dtypes[i], pd.CategoricalDtype):
-            density = np.array([self.dist_[i].get(value, 1e-9) for value in X[:, i]])
+        if isinstance(self.feature_dtypes[i], pd.CategoricalDtype):
+            densities = np.array(
+                [self.feature_distributions[i].get(value, 1e-9) for value in X[:, i]]
+            )
         else:
-            probabilities, bin_edges = self.dist_[i]
+            probabilities, bin_edges = self.feature_distributions[i]
             digitized = np.digitize(X[:, i], bin_edges, right=True)
             bin_indices = np.clip(digitized - 1, 0, len(probabilities) - 1)
-            density = probabilities[bin_indices]
+            densities = probabilities[bin_indices]
 
-        return np.log(density + 1e-9)
+        return np.log(densities + 1e-9)
 
-    def _decision_function(self, X: np.ndarray) -> np.ndarray:
+    def _compute_decision_scores(self, X: np.ndarray) -> np.ndarray:
         """
-        Compute the decision function for the input data X.
-        This function calculates the outlier scores for each feature in the input
-        data and returns the sum of these scores for each sample.
-        Parameters
-        ----------
-        X : np.ndarray
-            The input data array of shape (n_samples, n_features).
-        Returns
-        -------
-        np.ndarray
-            The computed outlier scores for each sample, as a 1D array of shape (n_samples,).
+        Compute decision scores for the input data.
         """
 
         X = check_array(X)
@@ -167,15 +140,7 @@ class SPAD(BaseHistogramModel):
 
     def decision_function(self, X: np.ndarray) -> np.ndarray:
         """
-        Compute the decision function for the input data.
-        Parameters
-        ----------
-        X : np.ndarray
-            Input data array.
-        Returns
-        -------
-        np.ndarray
-            Decision function values for the input data.
+        Compute decision function values for the input data.
         """
 
         self._check_columns(X)
@@ -184,4 +149,4 @@ class SPAD(BaseHistogramModel):
 
         if self.plus:
             X = np.concatenate((X, self.pca_model.transform(X)), axis=1)
-        return self._decision_function(X)
+        return self._compute_decision_scores(X)
