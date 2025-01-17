@@ -110,7 +110,7 @@ class Plot:
 
         fig.add_trace(
             go.Bar(
-                x=analysis["datetime"],
+                x=analysis.get("datetime"),
                 y=positive_bars,
                 base=[reference_line] * len(positive_bars),
                 name="Above Reference",
@@ -123,7 +123,7 @@ class Plot:
 
         fig.add_trace(
             go.Bar(
-                x=analysis["datetime"],
+                x=analysis.get("datetime"),
                 y=negative_bars,
                 base=reference_line - negative_bars,
                 name="Below Reference",
@@ -182,7 +182,7 @@ class Plot:
 
         fig.add_trace(
             go.Scatter(
-                x=analysis["datetime"],
+                x=analysis.get("datetime"),
                 y=analysis["metric"],
                 mode="markers",
                 name="Metric",
@@ -193,7 +193,7 @@ class Plot:
         # Confidence interval shading
         fig.add_trace(
             go.Scatter(
-                x=analysis["datetime"],
+                x=analysis.get("datetime"),
                 y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
                 fill="toself",
                 fillcolor="rgba(0, 100, 255, 0.2)",
