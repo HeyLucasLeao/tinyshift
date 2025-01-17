@@ -38,6 +38,8 @@ class TestHBOS(unittest.TestCase):
         self.assertIsNotNone(hbos.feature_distributions)
         self.assertEqual(len(hbos.feature_dtypes), X.shape[1])
         self.assertEqual(len(hbos.feature_distributions), X.shape[1])
+        self.assertTrue(hasattr(hbos, "decision_scores_"))
+        self.assertEqual(hbos.n_features, X.shape[1])
 
     def test_dynamic_bins(self):
         hbos = HBOS()
