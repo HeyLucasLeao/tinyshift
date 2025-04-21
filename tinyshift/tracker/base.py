@@ -1,8 +1,9 @@
 from ..plot import plot
 import numpy as np
 from scipy.stats import norm
-from typing import Callable, Union, Tuple, Dict
+from typing import Callable, Union, Tuple
 import pandas as pd
+from ..utils import StatisticalInterval
 
 
 class BaseModel:
@@ -46,7 +47,10 @@ class BaseModel:
         self.plot = plot.Plot(
             self.statistics, reference, self.enable_confidence_interval
         )
-        self._drift_limit_generate(self.statistics, reference, drift_limit)
+
+        self.statistics["lower_limit"], self.statistics["upper_limit"] = (
+            StatisticalInterval.compute_interval(reference["metric"], drift_limit)
+        )
 
     def _jackknife_acceleration(self, data: np.ndarray, statistic: Callable) -> float:
         """Calculate the acceleration parameter using jackknife resampling."""
@@ -147,73 +151,6 @@ class BaseModel:
             "ci_upper": ci_upper,
             "mean": estimated_mean,
         }
-
-    def _custom_threshold(
-        self, data: pd.Series, custom_func: Callable
-    ) -> Tuple[float, float]:
-        """Calculate thresholds using a custom function."""
-        return custom_func(data)
-
-    def _calculate_threshold(
-        self, data: pd.Series, center: Callable, spread: Callable, factor: float = 3
-    ) -> Tuple[float, float]:
-        """Calculate thresholds using a central tendency and spread function."""
-        center_value = center(data)
-        spread_value = spread(data)
-        lower_limit = center_value - factor * spread_value
-        upper_limit = center_value + factor * spread_value
-        return lower_limit, upper_limit
-
-    def _iqr_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
-        """
-        Calculates thresholds using IQR and median with a default factor of 1.5.
-        """
-
-        def iqr(x):
-            q75, q25 = np.percentile(x, [75, 25])
-            return q75 - q25
-
-        return self._calculate_threshold(df["metric"], np.median, iqr, factor=1.5)
-
-    def _stddev_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
-        """Calculates thresholds using mean and standard deviation."""
-        return self._calculate_threshold(df["metric"], np.mean, np.std)
-
-    def _mad_threshold(self, df: pd.DataFrame) -> Tuple[float, float]:
-        """Calculates thresholds using Median Absolute Deviation (MAD)."""
-        mad = lambda x: np.median(np.abs(x - np.median(x)))
-        return self._calculate_threshold(df["metric"], np.median, mad)
-
-    def _drift_limit_generate(
-        self,
-        statistics: Dict,
-        distribution: pd.DataFrame,
-        drift_limit: Union[str, Callable, Tuple[float]],
-    ):
-        """
-        Determines the drift limits based on the specified method.
-        """
-        if isinstance(drift_limit, str):
-            if drift_limit == "stddev":
-                lower_limit, upper_limit = self._stddev_threshold(distribution)
-            elif drift_limit == "mad":
-                lower_limit, upper_limit = self._mad_threshold(distribution)
-            elif drift_limit == "iqr":
-                lower_limit, upper_limit = self._iqr_threshold(distribution)
-            else:
-                raise ValueError(f"Unsupported drift limit method: {drift_limit}")
-        elif callable(drift_limit):
-            lower_limit, upper_limit = self._custom_threshold(
-                distribution["metric"], drift_limit
-            )
-        elif isinstance(drift_limit, tuple) and len(drift_limit) == 2:
-            lower_limit, upper_limit = drift_limit
-        else:
-            raise ValueError("Invalid drift limit specification.")
-
-        # Update the statistics dictionary with the new thresholds
-        statistics["lower_limit"] = lower_limit
-        statistics["upper_limit"] = upper_limit
 
     def _validate_columns(
         self,

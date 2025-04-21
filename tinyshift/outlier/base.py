@@ -54,8 +54,23 @@ class BaseHistogramModel:
         if isinstance(nbins, int) and nbins > 0:
             return nbins
         elif isinstance(nbins, str):
-            bin_edges = np.histogram_bin_edges(X, bins=nbins)
-            return len(bin_edges) - 1
+            try:
+                bin_edges = np.histogram_bin_edges(X, bins=nbins)
+                return len(bin_edges) - 1
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid binning strategy '{nbins}'. Please use a positive integer or one of the following valid strategies: "
+                    "'auto', 'fd', 'doane', 'scott', 'stone', 'rice', 'sturges', or 'sqrt'.\n"
+                    "Descriptions:\n"
+                    "- 'auto': Minimum bin width between the 'sturges' and 'fd' estimators. Provides good all-around performance.\n"
+                    "- 'fd' (Freedman Diaconis Estimator): Robust estimator that accounts for data variability and size.\n"
+                    "- 'doane': Improved version of Sturges’ estimator for non-normal datasets.\n"
+                    "- 'scott': Less robust estimator that considers data variability and size.\n"
+                    "- 'stone': Based on leave-one-out cross-validation of the integrated squared error. Generalizes Scott’s rule.\n"
+                    "- 'rice': Considers only data size, often overestimates the number of bins.\n"
+                    "- 'sturges': Optimal for Gaussian data, underestimates bins for large non-Gaussian datasets.\n"
+                    "- 'sqrt': Square root of data size, used for simplicity and speed."
+                ) from e
         else:
             raise ValueError(
                 "nbins must be a positive integer or a valid `np.histogram_bin_edges` binning strategy."
