@@ -5,6 +5,7 @@ from collections import Counter
 from sklearn.decomposition import PCA
 from .base import BaseHistogramModel
 from typing import Union
+from ..utils import StatisticalInterval
 
 
 class SPAD(BaseHistogramModel):
@@ -44,27 +45,33 @@ class SPAD(BaseHistogramModel):
         X: np.ndarray,
         nbins: Union[int, str] = 5,
         random_state: int = 42,
+        method="stddev",
     ) -> "SPAD":
         """
         Fit the SPAD model to the data.
+
         Parameters
         ----------
         X : np.ndarray
-            The input data to fit. Can be a numpy array, pandas Series, or pandas DataFrame.
+            The input data to fit. Must be a numpy array.
         nbins : Union[int, str], optional
             The number of bins to use for discretizing continuous features. Default is 5.
         random_state : int, optional
             The random seed for reproducibility. Default is 42.
+        method : str, optional
+            The method to compute the interval for continuous features. Default is "stddev", based on the original paper.
+
         Returns
         -------
         SPAD
             The fitted SPAD model.
+
         Notes
         -----
-        - If `X` is a pandas Series or DataFrame, the data types and column names are stored.
-        - If `self.plus` is True, PCA is applied to the data and the transformed features are concatenated. (SPAD+)
+        - The data types and column names are extracted and stored.
+        - If `self.plus` is True, PCA is applied to the data, and the transformed features are concatenated (SPAD+).
         - For categorical features, relative frequencies are computed using Laplace smoothing.
-        - For continuous features, the data is discretized into bins and probabilities are computed.
+        - For continuous features, the data is discretized into bins, and probabilities are computed.
         - The decision scores are computed and stored in `self.decision_scores_`.
         """
         self._extract_feature_info(X)
@@ -93,10 +100,9 @@ class SPAD(BaseHistogramModel):
                 }
                 self.feature_distributions.append(relative_frequencies)
             else:
-                mean = np.mean(X[:, i])
-                std = np.std(X[:, i])
-                lower_bound = mean - 3 * std
-                upper_bound = mean + 3 * std
+                lower_bound, upper_bound = StatisticalInterval.compute_interval(
+                    X[:, i], method
+                )
                 bin_edges = np.linspace(lower_bound, upper_bound, nbins + 1)
                 digitized = np.digitize(X[:, i], bin_edges, right=True)
                 unique_bins, counts = np.unique(digitized, return_counts=True)
