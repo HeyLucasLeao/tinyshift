@@ -6,8 +6,8 @@ import pandas as pd
 
 
 class Plot:
-    def __init__(self, statistics, distribution, enable_confidence_interval):
-        self.enable_confidence_interval = enable_confidence_interval
+    def __init__(self, statistics, distribution, confidence_interval):
+        self.confidence_interval = confidence_interval
         self.statistics = statistics
         self.distribution = distribution
 
@@ -134,7 +134,7 @@ class Plot:
                 opacity=0.7,
             )
         )
-        if self.enable_confidence_interval:
+        if self.confidence_interval:
             fig.add_hrect(
                 y0=self.statistics.get("ci_lower"),
                 y1=self.statistics.get("ci_upper"),
@@ -191,7 +191,7 @@ class Plot:
             )
         )
 
-        if self.enable_confidence_interval:
+        if self.confidence_interval:
             fig.add_trace(
                 go.Scatter(
                     x=analysis.get("datetime"),

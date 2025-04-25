@@ -14,14 +14,14 @@ class AnomalyTracker(BaseModel):
         n_resamples: int = 1000,
         random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
-        enable_confidence_interval: bool = False,
+        confidence_interval: bool = False,
     ):
         """
-        A tracker for monitoring anomaly over time using a specified evaluation metric.
+        A tracker for monitoring anomalies over time using a specified evaluation metric.
         The tracker compares the performance metric across time periods to a reference distribution
         and identifies potential performance degradation.
 
-        Parameters:
+        Parameters
         ----------
         anomaly_model : Union[SPAD, HBOS]
             The anomaly detection model used to calculate anomaly scores.
@@ -30,18 +30,21 @@ class AnomalyTracker(BaseModel):
             Default is `np.mean`.
         confidence_level : float, optional
             The confidence level for calculating statistical thresholds.
-            Default is 0.997.
+            Must be between 0 and 1. Default is 0.997.
         n_resamples : int, optional
             Number of resamples for bootstrapping when calculating statistics.
-            Default is 1000.
+            Must be a positive integer. Default is 1000.
         random_state : int, optional
             Seed for reproducibility of random resampling.
             Default is 42.
         drift_limit : Union[str, Tuple[float, float]], optional
-            User-defined thresholds for drift detection.
+            User-defined thresholds for drift detection. Can be "stddev" or a tuple of floats.
             Default is "stddev".
+        confidence_interval : bool, optional
+            Whether to calculate and include confidence intervals in the analysis.
+            Default is False.
 
-        Attributes:
+        Attributes
         ----------
         anomaly_model : Union[SPAD, HBOS]
             The anomaly detection model instance.
@@ -64,7 +67,7 @@ class AnomalyTracker(BaseModel):
             n_resamples,
             random_state,
             drift_limit,
-            enable_confidence_interval,
+            confidence_interval,
         )
 
     def score(
