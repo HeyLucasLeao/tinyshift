@@ -18,7 +18,7 @@ class ContinuousDriftTracker(BaseModel):
         n_resamples: int = 1000,
         random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
-        enable_confidence_interval: bool = False,
+        confidence_interval: bool = False,
     ):
         """
         A Tracker for identifying drift in continuous data over time. The Tracker uses
@@ -93,7 +93,7 @@ class ContinuousDriftTracker(BaseModel):
             n_resamples,
             random_state,
             drift_limit,
-            enable_confidence_interval,
+            confidence_interval,
         )
 
     def _calculate_distribution(
