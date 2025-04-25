@@ -21,9 +21,10 @@ class ContinuousDriftTracker(BaseModel):
         confidence_interval: bool = False,
     ):
         """
-        A Tracker for identifying drift in continuous data over time. The Tracker uses
-        a reference dataset to compute a baseline distribution and compare subsequent data
-        for deviations using the Kolmogorov-Smirnov test and statistical thresholds.
+        A Tracker for identifying drift in continuous data over time. This tracker uses
+        a reference dataset to compute a baseline distribution and compares subsequent data
+        for deviations using statistical distance metrics such as the Wasserstein distance
+        or the Kolmogorov-Smirnov test.
 
         Parameters:
         ----------
@@ -36,10 +37,10 @@ class ContinuousDriftTracker(BaseModel):
         period : str
             The frequency for grouping data (e.g., '1D' for daily, '1H' for hourly).
         func : str, optional
-            The distance function to use ('ws' or 'ks').
+            The distance function to use ('ws' for Wasserstein distance or 'ks' for Kolmogorov-Smirnov test).
             Default is 'ws'.
         statistic : callable, optional
-            The statistic function used to summarize the reference KS metrics.
+            The statistic function used to summarize the reference distance metrics.
             Default is `np.mean`.
         confidence_level : float, optional
             The confidence level for calculating statistical thresholds.
@@ -50,22 +51,25 @@ class ContinuousDriftTracker(BaseModel):
         random_state : int, optional
             Seed for reproducibility of random resampling.
             Default is 42.
-        thresholds : tuple, optional
-            User-defined thresholds for drift detection.
-            Default is an empty tuple.
+        drift_limit : str or tuple, optional
+            Defines the threshold for drift detection. If 'stddev', thresholds are based on
+            the standard deviation of the reference metrics. If a tuple, it specifies custom
+            lower and upper thresholds.
+            Default is 'stddev'.
+        confidence_interval : bool, optional
+            Whether to calculate confidence intervals for the drift metrics.
+            Default is False.
 
         Attributes:
         ----------
         period : str
             The grouping frequency used for analysis.
+        func : str
+            The selected distance function ('ws' or 'ks').
         reference_distribution : Series
             The distribution of the reference dataset grouped by the specified period.
-        reference_ks : DataFrame
-            The Kolmogorov-Smirnov test results for the reference dataset.
-        statistics : dict
-            Statistical thresholds and summary statistics for drift detection.
-        plot : Plot
-            A plotting utility for visualizing drift results.
+        reference_distance : DataFrame
+            The calculated distance metrics for the reference dataset.
         """
 
         self._validate_columns(reference, target_col, datetime_col)
@@ -104,24 +108,7 @@ class ContinuousDriftTracker(BaseModel):
         period: str,
     ) -> pd.Series:
         """
-        Calculate the continuous distribution of a target column grouped by a given period.
-
-        Parameters:
-        ----------
-        df : pd.DataFrame
-            The dataset to analyze.
-        column_name : str
-            The name of the column containing the continuous variable.
-        timestamp : str
-            The name of the datetime column for temporal grouping.
-        period : str
-            The frequency for grouping (e.g., '1D', '1H').
-
-        Returns:
-        -------
-        pd.Series
-            A Pandas Series where each index corresponds to a time period, and each value is
-            a list of continuous values for that period.
+        Calculate the grouped continuous distribution of a column based on a specified time period.
         """
         return (
             df[[timestamp, column_name]]
@@ -156,19 +143,21 @@ class ContinuousDriftTracker(BaseModel):
         func_name: Callable,
     ) -> pd.DataFrame:
         """
-        Calculate the Kolmogorov-Smirnov test metric over a rolling cumulative window.
+        Compute a distance metric (e.g., Kolmogorov-Smirnov test) over a rolling cumulative window.
 
-        Parameters:
-        ----------
-        p : Series
-            A Pandas Series where each element is a list representing the distribution
-            of values for a specific period.
+        This method calculates a specified statistical distance metric between the cumulative
+        distribution of past values and the current distribution for each period in the input series.
 
-        Returns:
-        -------
-        DataFrame
-            A DataFrame containing datetime indices and the calculated KS test metric
-            for each period.
+        Parameters
+        p : pd.Series
+        func_name : Callable
+            A function or callable that computes the distance metric between two distributions.
+
+        Returns
+        pd.DataFrame
+            A DataFrame containing:
+            - 'datetime': The datetime indices corresponding to each period (excluding the first).
+            - 'metric': The calculated distance metric for each period.
         """
         func = self._selection_function(func_name)
 

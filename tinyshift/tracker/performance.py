@@ -22,13 +22,13 @@ class PerformanceTracker(BaseModel):
         confidence_interval: bool = False,
     ):
         """
-        A tracker for monitoring model performance over time using a specified evaluation metric.
+        Initialize a tracker for monitoring model performance over time using a specified evaluation metric.
         The tracker compares the performance metric across time periods to a reference distribution
         and identifies potential performance degradation.
 
         Parameters:
         ----------
-        reference : DataFrame
+        reference : pd.DataFrame
             The reference dataset used to compute the baseline metric distribution.
         target_col : str
             The name of the column containing the actual target values.
@@ -38,10 +38,10 @@ class PerformanceTracker(BaseModel):
             The name of the column containing datetime values for temporal grouping.
         period : str
             The frequency for grouping data (e.g., 'W' for weekly, 'M' for monthly).
-        metric_score : callable, optional
+        metric_score : Callable, optional
             The function to compute the evaluation metric (e.g., `f1_score`).
             Default is `f1_score`.
-        statistic : callable, optional
+        statistic : Callable, optional
             The statistic function used to summarize the reference metric distribution.
             Default is `np.mean`.
         confidence_level : float, optional
@@ -53,22 +53,22 @@ class PerformanceTracker(BaseModel):
         random_state : int, optional
             Seed for reproducibility of random resampling.
             Default is 42.
-        thresholds : tuple, optional
-            User-defined thresholds for drift detection.
-            Default is an empty tuple.
+        drift_limit : Union[str, Tuple[float, float]], optional
+            The method or thresholds for drift detection. If "stddev", thresholds are based on standard deviation.
+            If a tuple, it specifies custom lower and upper thresholds.
+            Default is "stddev".
+        confidence_interval : bool, optional
+            Whether to calculate confidence intervals for the metric distribution.
+            Default is False.
 
         Attributes:
         ----------
         period : str
             The grouping frequency used for analysis.
-        metric_score : callable
+        metric_score : Callable
             The evaluation metric function used for tracking performance.
-        reference_distribution : DataFrame
+        reference_distribution : pd.DataFrame
             The performance metric distribution of the reference dataset.
-        statistics : dict
-            Statistical thresholds and summary statistics for performance monitoring.
-        plot : Plot
-            A plotting utility for visualizing performance over time.
         """
 
         self._validate_params(

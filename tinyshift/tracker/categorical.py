@@ -34,7 +34,7 @@ class CategoricalDriftTracker(BaseModel):
 
         Parameters:
         ----------
-        reference : DataFrame
+        reference : pd.DataFrame
             The reference dataset used to compute the baseline distribution.
         target_col : str
             The name of the column containing the categorical variable to analyze.
@@ -45,7 +45,7 @@ class CategoricalDriftTracker(BaseModel):
         func : str, optional
             The distance function to use ('l_infinity' or 'jensenshannon').
             Default is 'l_infinity'.
-        statistic : callable, optional
+        statistic : Callable, optional
             The statistic function used to summarize the reference distances.
             Default is `np.mean`.
         confidence_level : float, optional
@@ -57,22 +57,24 @@ class CategoricalDriftTracker(BaseModel):
         random_state : int, optional
             Seed for reproducibility of random resampling.
             Default is 42.
-        drift_limit : tuple, optional
-            User-defined thresholds for drift detection.
-            Default is the 'deviation method'.
+        drift_limit : Union[str, Tuple[float, float]], optional
+            User-defined thresholds for drift detection. If set to "stddev", thresholds
+            are calculated based on the standard deviation of the reference distances.
+            Default is "stddev".
+        confidence_interval : bool, optional
+            Whether to calculate and include confidence intervals in the drift analysis.
+            Default is False.
 
         Attributes:
         ----------
         period : str
             The grouping frequency used for analysis.
-        reference_frequency : DataFrame
+        func : Callable
+            The distance function used for drift calculation.
+        reference_frequency : pd.DataFrame
             The frequency distribution of the reference dataset.
-        reference_distance : DataFrame
+        reference_distance : pd.DataFrame
             The distance metric values for the reference dataset.
-        statistics : dict
-            Statistical thresholds and summary statistics for drift detection.
-        plot : Plot
-            A plotting utility for visualizing drift results.
         """
 
         self._validate_columns(reference, target_col, datetime_col)
@@ -110,24 +112,7 @@ class CategoricalDriftTracker(BaseModel):
         period: str,
     ) -> pd.DataFrame:
         """
-        Calculate the frequency distribution of the target column grouped by a time period.
-
-        Parameters:
-        ----------
-        df : DataFrame
-            The dataset to analyze.
-        target_col : str
-            The name of the categorical column.
-        datetime_col : str
-            The name of the datetime column for temporal grouping.
-        period : str
-            The frequency for grouping (e.g., 'D', 'M').
-
-        Returns:
-        -------
-        DataFrame
-            A pivot table of frequencies with time periods as rows and categorical
-            values as columns.
+        Calculates the frequency distribution of a categorical column grouped by a specified time period.
         """
         freq = (
             df.groupby([pd.Grouper(key=datetime_col, freq=period), target_col])
@@ -153,19 +138,20 @@ class CategoricalDriftTracker(BaseModel):
         p: pd.DataFrame,
     ) -> pd.DataFrame:
         """
-        Compute a distance metric between consecutive periods in the frequency distribution.
+        This method calculates a distance metric between consecutive rows of a frequency
+        distribution DataFrame, where rows represent time periods and columns represent
+        categorical values. The distance is computed using a specified function.
 
-        Parameters:
-        ----------
-        p : DataFrame
-            The frequency distribution with time periods as rows and categorical values as columns.
-        func : str
-            The distance function to use ('l_infinity' or 'jensenshannon').
+        Parameters
+        p : pd.DataFrame
+            A DataFrame representing the frequency distribution, where rows correspond to
+            time periods and columns correspond to categorical values.
 
-        Returns:
-        -------
-        DataFrame
-            A DataFrame containing datetime values and the calculated distances.
+        Returns
+        pd.DataFrame
+            A DataFrame containing two columns:
+            - 'datetime': The datetime values corresponding to the time periods (excluding the first period).
+            - 'metric': The calculated distance metric for each consecutive period.
         """
         n = p.shape[0]
         distances = np.zeros(n)

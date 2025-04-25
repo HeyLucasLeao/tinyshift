@@ -85,6 +85,9 @@ class BaseModel:
         target_col: str,
         datetime_col: str,
     ):
+        """
+        Validates the presence and types of target and datetime columns in a DataFrame.
+        """
         if target_col not in df.columns:
             raise KeyError(f"Column {target_col} is not in the DataFrame.")
         if datetime_col not in df.columns:
@@ -98,6 +101,9 @@ class BaseModel:
         n_resamples: int,
         period: str,
     ):
+        """
+        Validates the input parameters for confidence level, number of resamples, and period.
+        """
         if not 0 < confidence_level <= 1:
             raise ValueError("confidence_level must be between 0 and 1.")
         if n_resamples <= 0:
