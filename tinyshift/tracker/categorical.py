@@ -27,19 +27,13 @@ class CategoricalDriftTracker(BaseModel):
     ):
         """
         A tracker for identifying drift in categorical data over time. The tracker uses
-        a reference dataset to compute a baseline distribution and compare subsequent data
+        a reference dataset to compute a baseline distribution and compares subsequent data
         for deviations based on a distance metric and drift limits.
 
-        Parameters:
+        Parameters
         ----------
         reference : pd.DataFrame
             The reference dataset used to compute the baseline distribution.
-        target_col : str
-            The name of the column containing the categorical variable to analyze.
-        datetime_col : str
-            The name of the column containing datetime values for temporal grouping.
-        period : str
-            The frequency for grouping data (e.g., 'D' for daily, 'M' for monthly).
         func : str, optional
             The distance function to use ('l_infinity' or 'jensenshannon').
             Default is 'l_infinity'.
@@ -63,12 +57,12 @@ class CategoricalDriftTracker(BaseModel):
             Whether to calculate and include confidence intervals in the drift analysis.
             Default is False.
 
-        Attributes:
+        Attributes
         ----------
         func : Callable
             The distance function used for drift calculation.
-        reference_frequency : pd.DataFrame
-            The frequency distribution of the reference dataset.
+        reference_distribution : np.ndarray
+            The normalized distribution of the reference dataset.
         reference_distance : pd.DataFrame
             The distance metric values for the reference dataset.
         """
@@ -161,21 +155,18 @@ class CategoricalDriftTracker(BaseModel):
         analysis: pd.DataFrame,
     ) -> pd.DataFrame:
         """
-        Assess drift in the provided dataset by comparing its distribution to the reference.
+        Evaluate drift in the provided dataset by comparing its distribution to the reference.
 
-        Parameters:
+        Parameters
         ----------
-        analysis : DataFrame
+        analysis : pd.DataFrame
             The dataset to analyze for drift.
-        target_col : str
-            The name of the categorical column in the analysis dataset.
-        datetime_col : str
-            The name of the datetime column in the analysis dataset.
 
-        Returns:
+        Returns
         -------
-        DataFrame
-            A DataFrame containing metrics and drift detection results for each time period.
+        pd.DataFrame
+            A DataFrame containing the calculated drift metrics and drift detection results
+            for each time period.
         """
 
         # Calculate frequency and percentage distribution

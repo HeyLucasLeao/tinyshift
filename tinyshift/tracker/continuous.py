@@ -8,7 +8,7 @@ from typing import Callable, Tuple, Union
 class ContinuousDriftTracker(BaseModel):
     def __init__(
         self,
-        reference: pd.DataFrame,
+        reference: Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray],
         func: str = "ws",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
@@ -23,16 +23,10 @@ class ContinuousDriftTracker(BaseModel):
         for deviations using statistical distance metrics such as the Wasserstein distance
         or the Kolmogorov-Smirnov test.
 
-        Parameters:
+        Parameters
         ----------
-        reference : DataFrame
+        reference : Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray]
             The reference dataset used to compute the baseline distribution.
-        target_col : str
-            The name of the column containing the continuous variable to analyze.
-        datetime_col : str
-            The name of the column containing datetime values for temporal grouping.
-        period : str
-            The frequency for grouping data (e.g., '1D' for daily, '1H' for hourly).
         func : str, optional
             The distance function to use ('ws' for Wasserstein distance or 'ks' for Kolmogorov-Smirnov test).
             Default is 'ws'.
@@ -57,14 +51,12 @@ class ContinuousDriftTracker(BaseModel):
             Whether to calculate confidence intervals for the drift metrics.
             Default is False.
 
-        Attributes:
+        Attributes
         ----------
-        period : str
-            The grouping frequency used for analysis.
         func : str
             The selected distance function ('ws' or 'ks').
-        reference_distribution : Series
-            The distribution of the reference dataset grouped by the specified period.
+        reference_distribution : Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray]
+            The reference dataset used to compute the baseline distribution.
         reference_distance : DataFrame
             The calculated distance metrics for the reference dataset.
         """
@@ -145,22 +137,17 @@ class ContinuousDriftTracker(BaseModel):
         analysis: pd.DataFrame,
     ) -> pd.DataFrame:
         """
-        Assess drift in the provided dataset by comparing its distribution to the reference.
+        Parameters
+        analysis : pd.DataFrame
+            The dataset to analyze for drift. Each row represents a sample, and the index
+            should correspond to datetime values.
 
-        Parameters:
-        ----------
-        analysis : DataFrame
-            The dataset to analyze for drift.
-        target_col : str
-            The name of the continuous column in the analysis dataset.
-        datetime_col : str
-            The name of the datetime column in the analysis dataset.
-
-        Returns:
-        -------
-        DataFrame
-            A DataFrame containing datetime values, drift metrics, and a boolean
-            indicating whether drift was detected for each time period.
+        Returns
+        pd.DataFrame
+            A DataFrame containing the following columns:
+            - "datetime": The datetime values corresponding to each row in the analysis dataset.
+            - "metric": The computed drift metric for each row.
+            - "is_drifted": A boolean indicating whether drift was detected for each time period.
         """
         reference = np.concatenate(np.asarray(self.reference_distribution))
         func = self._selection_function(self.func)
