@@ -130,33 +130,28 @@ class ContinuousDriftTracker(BaseModel):
             value = func(past_values, p[i])
             values[i] = value
 
-        return pd.DataFrame({"datetime": index, "metric": values[1:]})
+        return pd.Series(values[1:], index=index)
 
     def score(
         self,
         analysis: pd.DataFrame,
-    ) -> pd.DataFrame:
+    ) -> pd.Series:
         """
+        Calculate the drift metric for each time period in the provided dataset.
+
         Parameters
+        ----------
         analysis : pd.DataFrame
-            The dataset to analyze for drift. Each row represents a sample, and the index
-            should correspond to datetime values.
+            A DataFrame where each row represents a time period and columns represent
+            categorical values. The dataset is compared to the reference distribution
+            to evaluate drift.
 
         Returns
-        pd.DataFrame
-            A DataFrame containing the following columns:
-            - "datetime": The datetime values corresponding to each row in the analysis dataset.
-            - "metric": The computed drift metric for each row.
-            - "is_drifted": A boolean indicating whether drift was detected for each time period.
+        -------
+        pd.Series
+            A Series containing the calculated drift metric for each time period.
         """
         reference = np.concatenate(np.asarray(self.reference_distribution))
         func = self._selection_function(self.func)
-        metrics = np.array([func(reference, row) for row in analysis])
-        metrics = pd.DataFrame(
-            {
-                "datetime": analysis.index,
-                "metric": metrics,
-            },
-        )
-        metrics["is_drifted"] = self._is_drifted(metrics)
-        return metrics
+
+        return analysis.map(lambda row: func(reference, row))

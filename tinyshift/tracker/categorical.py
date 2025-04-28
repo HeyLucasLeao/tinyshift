@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import jensenshannon
 from .base import BaseModel
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, List
 from collections import Counter
 
 
@@ -16,7 +16,9 @@ def l_infinity(a, b):
 class CategoricalDriftTracker(BaseModel):
     def __init__(
         self,
-        reference: pd.DataFrame,
+        reference: Union[
+            pd.Series, pd.core.groupby.SeriesGroupBy, List[list], np.ndarray
+        ],
         func: str = "l_infinity",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
@@ -148,36 +150,30 @@ class CategoricalDriftTracker(BaseModel):
             dist = self.func(past_value, current_value)
             distances[i] = dist
 
-        return pd.DataFrame({"datetime": index, "metric": distances[1:]})
+        return pd.Series(distances[1:], index=index)
 
     def score(
         self,
         analysis: pd.DataFrame,
-    ) -> pd.DataFrame:
+    ) -> pd.Series:
         """
-        Evaluate drift in the provided dataset by comparing its distribution to the reference.
+        Calculate the drift metric for each time period in the provided dataset.
 
         Parameters
         ----------
         analysis : pd.DataFrame
-            The dataset to analyze for drift.
+            A DataFrame where each row represents a time period and columns represent
+            categorical values. The dataset is compared to the reference distribution
+            to evaluate drift.
 
         Returns
         -------
-        pd.DataFrame
-            A DataFrame containing the calculated drift metrics and drift detection results
-            for each time period.
+        pd.Series
+            A Series containing the calculated drift metric for each time period.
         """
-
-        # Calculate frequency and percentage distribution
         freq = self._calculate_frequency(analysis)
         percent = freq.div(freq.sum(axis=1), axis=0)
 
-        # Calculate drift metrics for each time period
-        percent["metric"] = percent.apply(
+        return percent.apply(
             lambda row: self.func(row, self.reference_distribution), axis=1
         )
-
-        percent["is_drifted"] = self._is_drifted(percent)
-
-        return percent

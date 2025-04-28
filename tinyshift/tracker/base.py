@@ -3,9 +3,10 @@ import numpy as np
 from typing import Callable, Union, Tuple
 import pandas as pd
 from ..stats import StatisticalInterval, BootstrapBCA
+from abc import ABC, abstractmethod
 
 
-class BaseModel:
+class BaseModel(ABC):
     def __init__(
         self,
         reference: pd.DataFrame,
@@ -48,12 +49,12 @@ class BaseModel:
         self.plot = plot.Plot(self.statistics, reference, self.confidence_interval)
 
         self.statistics["lower_limit"], self.statistics["upper_limit"] = (
-            StatisticalInterval.compute_interval(reference["metric"], drift_limit)
+            StatisticalInterval.compute_interval(reference, drift_limit)
         )
 
     def _generate_statistics(
         self,
-        df: pd.DataFrame,
+        data: pd.Series,
         confidence_level: float,
         statistic: Callable,
         n_resamples: int,
@@ -66,7 +67,7 @@ class BaseModel:
 
         if self.confidence_interval:
             ci_lower, ci_upper = BootstrapBCA.compute_interval(
-                df["metric"],
+                data,
                 confidence_level,
                 statistic,
                 n_resamples,
@@ -76,7 +77,7 @@ class BaseModel:
         return {
             "ci_lower": ci_lower,
             "ci_upper": ci_upper,
-            "mean": np.mean(df["metric"]),
+            "mean": np.mean(data),
         }
 
     def _validate_columns(
@@ -95,16 +96,44 @@ class BaseModel:
         if not pd.api.types.is_datetime64_any_dtype(df[datetime_col]):
             raise TypeError(f"Column {datetime_col} must be of datetime type.")
 
-    def _is_drifted(self, df: pd.DataFrame) -> pd.Series:
+    def _is_drifted(self, data: pd.Series) -> pd.Series:
         """
         Checks if metrics in the DataFrame are outside specified limits
         and returns the drift status.
         """
-        is_drifted = pd.Series([False] * len(df))
+        is_drifted = pd.Series([False] * len(data))
 
         if self.statistics["lower_limit"] is not None:
-            is_drifted |= df["metric"] <= self.statistics["lower_limit"]
+            is_drifted = data <= self.statistics["lower_limit"]
         if self.statistics["upper_limit"] is not None:
-            is_drifted |= df["metric"] >= self.statistics["upper_limit"]
+            is_drifted = data >= self.statistics["upper_limit"]
 
         return is_drifted
+
+    @abstractmethod
+    def score(
+        self,
+        analysis: pd.DataFrame,
+    ) -> pd.Series:
+        """
+        Calculate the drift metric for each time period in the provided dataset.
+
+        Parameters
+        ----------
+        analysis : pd.DataFrame
+            A DataFrame where each row represents a time period and columns represent
+            categorical values. The dataset is compared to the reference distribution
+            to evaluate drift.
+
+        Returns
+        -------
+        pd.Series
+            A Series containing the calculated drift metric for each time period.
+        """
+        pass
+
+    def predict(self, analysis: pd.DataFrame) -> pd.DataFrame:
+        """Predict drift for each time period in the dataset compared to the reference."""
+        metrics = self.score(analysis)
+
+        return self._is_drifted(metrics)
