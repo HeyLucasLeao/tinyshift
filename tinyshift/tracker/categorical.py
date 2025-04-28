@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.spatial.distance import jensenshannon
 from .base import BaseModel
 from typing import Callable, Tuple, Union
+from collections import Counter
 
 
 def l_infinity(a, b):
@@ -16,9 +17,6 @@ class CategoricalDriftTracker(BaseModel):
     def __init__(
         self,
         reference: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-        period: str,
         func: str = "l_infinity",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
@@ -67,8 +65,6 @@ class CategoricalDriftTracker(BaseModel):
 
         Attributes:
         ----------
-        period : str
-            The grouping frequency used for analysis.
         func : Callable
             The distance function used for drift calculation.
         reference_frequency : pd.DataFrame
@@ -77,21 +73,18 @@ class CategoricalDriftTracker(BaseModel):
             The distance metric values for the reference dataset.
         """
 
-        self._validate_columns(reference, target_col, datetime_col)
-        self._validate_params(confidence_level, n_resamples, period)
-
-        self.period = period
         self.func = self._selection_function(func)
 
-        self.reference_frequency = self._calculate_frequency(
+        reference_frequency = self._calculate_frequency(
             reference,
-            target_col,
-            datetime_col,
-            period,
+        )
+
+        self.reference_distribution = reference_frequency.sum(axis=0) / np.sum(
+            reference_frequency.sum(axis=0)
         )
 
         self.reference_distance = self._generate_distance(
-            self.reference_frequency,
+            reference_frequency,
         )
 
         super().__init__(
@@ -106,21 +99,16 @@ class CategoricalDriftTracker(BaseModel):
 
     def _calculate_frequency(
         self,
-        df: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-        period: str,
+        data: np.ndarray,
     ) -> pd.DataFrame:
         """
-        Calculates the frequency distribution of a categorical column grouped by a specified time period.
+        Calculates the percent distribution of a categorical column grouped by a specified time period.
         """
-        freq = (
-            df.groupby([pd.Grouper(key=datetime_col, freq=period), target_col])
-            .size()
-            .unstack(fill_value=0)
-        )
-
-        return freq
+        index = data.index if isinstance(data, pd.Series) else list(range(len(data)))
+        data = np.asanyarray(data)
+        freq = [Counter(item) for item in data]
+        categories = np.unique(np.concatenate(data))
+        return pd.DataFrame(freq, columns=categories, index=index)
 
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
@@ -171,8 +159,6 @@ class CategoricalDriftTracker(BaseModel):
     def score(
         self,
         analysis: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
     ) -> pd.DataFrame:
         """
         Assess drift in the provided dataset by comparing its distribution to the reference.
@@ -191,24 +177,16 @@ class CategoricalDriftTracker(BaseModel):
         DataFrame
             A DataFrame containing metrics and drift detection results for each time period.
         """
-        self._validate_columns(analysis, target_col, datetime_col)
 
         # Calculate frequency and percentage distribution
-        freq = self._calculate_frequency(
-            analysis, target_col, datetime_col, self.period
-        )
+        freq = self._calculate_frequency(analysis)
         percent = freq.div(freq.sum(axis=1), axis=0)
 
-        # Calculate percentage distribution
-        ref_freq = self.reference_frequency.sum(axis=0)
-        ref_dist = ref_freq / np.sum(ref_freq)
-
         # Calculate drift metrics for each time period
-        metrics = (
-            percent.apply(lambda row: self.func(row, ref_dist), axis=1)
-            .rename("metric")
-            .reset_index()
+        percent["metric"] = percent.apply(
+            lambda row: self.func(row, self.reference_distribution), axis=1
         )
-        metrics["is_drifted"] = self._is_drifted(metrics)
 
-        return metrics
+        percent["is_drifted"] = self._is_drifted(percent)
+
+        return percent
