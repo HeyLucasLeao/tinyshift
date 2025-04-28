@@ -123,11 +123,11 @@ class ContinuousDriftTracker(BaseModel):
         values = np.zeros(n)
         past_values = np.array([], dtype=float)
         index = X.index[1:]
-        p = np.asarray(p)
+        X = np.asarray(X)
 
         for i in range(1, n):
-            past_values = np.concatenate([past_values, p[i - 1]])
-            value = func(past_values, p[i])
+            past_values = np.concatenate([past_values, X[i - 1]])
+            value = func(past_values, X[i])
             values[i] = value
 
         return pd.Series(values[1:], index=index)
@@ -141,5 +141,7 @@ class ContinuousDriftTracker(BaseModel):
         """
         reference = np.concatenate(np.asarray(self.reference_distribution))
         func = self._selection_function(self.func)
+        index = X.index if isinstance(X, pd.Series) else list(range(len(X)))
+        X = np.asarray(X)
 
-        return X.map(lambda row: func(reference, row))
+        return pd.Series([func(reference, row) for row in X], index=index)
