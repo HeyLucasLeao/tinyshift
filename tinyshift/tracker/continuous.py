@@ -9,9 +9,6 @@ class ContinuousDriftTracker(BaseModel):
     def __init__(
         self,
         reference: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-        period: str,
         func: str = "ws",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
@@ -72,22 +69,9 @@ class ContinuousDriftTracker(BaseModel):
             The calculated distance metrics for the reference dataset.
         """
 
-        self._validate_columns(reference, target_col, datetime_col)
-
-        self.period = period
         self.func = func
-
-        # Initialize frequency and statistics
-        self.reference_distribution = self._calculate_distribution(
-            reference,
-            target_col,
-            datetime_col,
-            period,
-        )
-
-        self.reference_distance = self._generate_distance(
-            self.reference_distribution, func
-        )
+        self.reference_distribution = reference
+        self.reference_distance = self._generate_distance(reference, func)
 
         super().__init__(
             self.reference_distance,
@@ -97,23 +81,6 @@ class ContinuousDriftTracker(BaseModel):
             random_state,
             drift_limit,
             confidence_interval,
-        )
-
-    def _calculate_distribution(
-        self,
-        df: pd.DataFrame,
-        column_name: str,
-        timestamp: str,
-        period: str,
-    ) -> pd.Series:
-        """
-        Calculate the grouped continuous distribution of a column based on a specified time period.
-        """
-        return (
-            df[[timestamp, column_name]]
-            .copy()
-            .groupby(pd.Grouper(key=timestamp, freq=period))[column_name]
-            .agg(list)
         )
 
     def _ks(self, a, b):
@@ -176,8 +143,6 @@ class ContinuousDriftTracker(BaseModel):
     def score(
         self,
         analysis: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
     ) -> pd.DataFrame:
         """
         Assess drift in the provided dataset by comparing its distribution to the reference.
@@ -197,19 +162,12 @@ class ContinuousDriftTracker(BaseModel):
             A DataFrame containing datetime values, drift metrics, and a boolean
             indicating whether drift was detected for each time period.
         """
-
-        self._validate_columns(analysis, target_col, datetime_col)
-
         reference = np.concatenate(np.asarray(self.reference_distribution))
-        dist = self._calculate_distribution(
-            analysis, target_col, datetime_col, self.period
-        )
-
         func = self._selection_function(self.func)
-        metrics = np.array([func(reference, row) for row in dist])
+        metrics = np.array([func(reference, row) for row in analysis])
         metrics = pd.DataFrame(
             {
-                "datetime": dist.index,
+                "datetime": analysis.index,
                 "metric": metrics,
             },
         )
