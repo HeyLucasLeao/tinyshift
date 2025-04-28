@@ -73,7 +73,6 @@ class ContinuousDriftTracker(BaseModel):
         """
 
         self._validate_columns(reference, target_col, datetime_col)
-        self._validate_params(confidence_level, n_resamples, period)
 
         self.period = period
         self.func = func

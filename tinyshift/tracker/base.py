@@ -95,22 +95,6 @@ class BaseModel:
         if not pd.api.types.is_datetime64_any_dtype(df[datetime_col]):
             raise TypeError(f"Column {datetime_col} must be of datetime type.")
 
-    def _validate_params(
-        self,
-        confidence_level: float,
-        n_resamples: int,
-        period: str,
-    ):
-        """
-        Validates the input parameters for confidence level, number of resamples, and period.
-        """
-        if not 0 < confidence_level <= 1:
-            raise ValueError("confidence_level must be between 0 and 1.")
-        if n_resamples <= 0:
-            raise ValueError("n_resamples must be a positive integer.")
-        if not isinstance(period, str):
-            raise TypeError("period must be a string (e.g., 'W', 'M').")
-
     def _is_drifted(self, df: pd.DataFrame) -> pd.Series:
         """
         Checks if metrics in the DataFrame are outside specified limits

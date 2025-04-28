@@ -71,11 +71,6 @@ class PerformanceTracker(BaseModel):
             The performance metric distribution of the reference dataset.
         """
 
-        self._validate_params(
-            confidence_level,
-            n_resamples,
-            period,
-        )
         self._validate_columns(
             reference,
             target_col,
