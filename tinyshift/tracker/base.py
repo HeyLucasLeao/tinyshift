@@ -1,14 +1,15 @@
 from ..plot import plot
 import numpy as np
-from typing import Callable, Union, Tuple
+from typing import Callable, Union, Tuple, List
 import pandas as pd
 from ..stats import StatisticalInterval, BootstrapBCA
+from abc import ABC, abstractmethod
 
 
-class BaseModel:
+class BaseModel(ABC):
     def __init__(
         self,
-        reference: pd.DataFrame,
+        reference: pd.Series,
         confidence_level: float,
         statistic: Callable,
         n_resamples: int,
@@ -17,14 +18,14 @@ class BaseModel:
         confidence_interval: bool,
     ):
         """
-        Initializes the BaseModel class with reference distribution, statistics, and drift limits.
+        Initialize the BaseModel class with reference distribution, statistics, and drift limits.
 
         Parameters
         ----------
-        reference : pd.DataFrame
-            Data containing the reference distribution with a "metric" column.
+        reference : pd.Series
+            Series containing the reference distribution.
         confidence_level : float
-            Desired confidence level for statistical calculations (e.g., 0.95).
+            Confidence level for statistical calculations (e.g., 0.95).
         statistic : Callable
             Function to compute summary statistics (e.g., np.mean).
         n_resamples : int
@@ -37,6 +38,11 @@ class BaseModel:
             Whether to compute confidence intervals for the reference distribution.
         """
 
+        if not 0 < confidence_level <= 1:
+            raise ValueError("confidence_level must be between 0 and 1.")
+        if n_resamples <= 0:
+            raise ValueError("n_resamples must be a positive integer.")
+
         self.confidence_interval = confidence_interval
         self.statistics = self._generate_statistics(
             reference,
@@ -48,12 +54,12 @@ class BaseModel:
         self.plot = plot.Plot(self.statistics, reference, self.confidence_interval)
 
         self.statistics["lower_limit"], self.statistics["upper_limit"] = (
-            StatisticalInterval.compute_interval(reference["metric"], drift_limit)
+            StatisticalInterval.compute_interval(reference, drift_limit)
         )
 
     def _generate_statistics(
         self,
-        df: pd.DataFrame,
+        data: pd.Series,
         confidence_level: float,
         statistic: Callable,
         n_resamples: int,
@@ -66,7 +72,7 @@ class BaseModel:
 
         if self.confidence_interval:
             ci_lower, ci_upper = BootstrapBCA.compute_interval(
-                df["metric"],
+                data,
                 confidence_level,
                 statistic,
                 n_resamples,
@@ -76,51 +82,53 @@ class BaseModel:
         return {
             "ci_lower": ci_lower,
             "ci_upper": ci_upper,
-            "mean": np.mean(df["metric"]),
+            "mean": np.mean(data),
         }
 
-    def _validate_columns(
-        self,
-        df: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-    ):
+    def _get_index(self, X: Union[pd.Series, List[np.ndarray], List[list]]):
         """
-        Validates the presence and types of target and datetime columns in a DataFrame.
+        Helper function to retrieve the index of a pandas Series or generate a default index.
         """
-        if target_col not in df.columns:
-            raise KeyError(f"Column {target_col} is not in the DataFrame.")
-        if datetime_col not in df.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(df[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+        return X.index if isinstance(X, pd.Series) else list(range(len(X)))
 
-    def _validate_params(
-        self,
-        confidence_level: float,
-        n_resamples: int,
-        period: str,
-    ):
+    def _is_drifted(self, data: pd.Series) -> pd.Series:
         """
-        Validates the input parameters for confidence level, number of resamples, and period.
-        """
-        if not 0 < confidence_level <= 1:
-            raise ValueError("confidence_level must be between 0 and 1.")
-        if n_resamples <= 0:
-            raise ValueError("n_resamples must be a positive integer.")
-        if not isinstance(period, str):
-            raise TypeError("period must be a string (e.g., 'W', 'M').")
+        Checks if metrics in the Series are outside specified limits
+        and returns the drift status as a boolean Series.
 
-    def _is_drifted(self, df: pd.DataFrame) -> pd.Series:
-        """
-        Checks if metrics in the DataFrame are outside specified limits
-        and returns the drift status.
-        """
-        is_drifted = pd.Series([False] * len(df))
+        Parameters
+        ----------
+        data : pd.Series
+            A Series containing the metrics to be checked against the drift limits.
 
-        if self.statistics["lower_limit"] is not None:
-            is_drifted |= df["metric"] <= self.statistics["lower_limit"]
-        if self.statistics["upper_limit"] is not None:
-            is_drifted |= df["metric"] >= self.statistics["upper_limit"]
+        Returns
+        -------
+        pd.Series
+            A boolean Series indicating whether each metric is drifted (True) or not (False).
+        """
+        is_drifted = pd.Series(False, index=data.index, dtype=bool)
+
+        lower_limit = self.statistics.get("lower_limit")
+        upper_limit = self.statistics.get("upper_limit")
+
+        if lower_limit is not None:
+            is_drifted |= data <= lower_limit
+        if upper_limit is not None:
+            is_drifted |= data >= upper_limit
 
         return is_drifted
+
+    @abstractmethod
+    def score(
+        self,
+        X: Union[pd.Series, List[np.ndarray], List[list]],
+    ) -> pd.Series:
+        """
+        Compute the drift metric for each time period in the provided dataset.
+        """
+        pass
+
+    def predict(self, X: Union[pd.Series, List[np.ndarray], List[list]]) -> pd.Series:
+        """Predict drift for each time period in the dataset compared to the reference."""
+        metrics = self.score(X)
+        return self._is_drifted(metrics)

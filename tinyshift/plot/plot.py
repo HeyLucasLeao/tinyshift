@@ -3,6 +3,7 @@ import numpy as np
 import plotly.express as px
 import scipy.stats
 import pandas as pd
+from typing import Union
 
 
 class Plot:
@@ -74,10 +75,8 @@ class Plot:
         """
         Generate a Kernel Density Estimate (KDE) plot for the distribution's metric.
         """
-        x_vals = np.linspace(
-            self.distribution["metric"].min(), self.distribution["metric"].max(), 1000
-        )
-        kde = scipy.stats.gaussian_kde(self.distribution["metric"])
+        x_vals = np.linspace(self.distribution.min(), self.distribution.max(), 1000)
+        kde = scipy.stats.gaussian_kde(self.distribution)
 
         # Create KDE plot using plotly.express
         fig = px.line(x=x_vals, y=kde(x_vals))
@@ -104,8 +103,8 @@ class Plot:
         Generate a diverging bar plot showing metric over time relative to a reference line.
         """
         reference_line = self.statistics["mean"]
-        positive_bars = np.maximum(analysis["metric"] - reference_line, 0)
-        negative_bars = np.maximum(reference_line - analysis["metric"], 0)
+        positive_bars = np.maximum(analysis - reference_line, 0)
+        negative_bars = np.maximum(reference_line - analysis, 0)
 
         fig = go.Figure()
 
@@ -116,7 +115,7 @@ class Plot:
                 base=[reference_line] * len(positive_bars),
                 name="Above Reference",
                 marker_color="lightslategrey",
-                customdata=analysis.loc[analysis["metric"] >= reference_line, "metric"],
+                customdata=analysis.loc[analysis >= reference_line],
                 hovertemplate="(%{x},%{y:.3f})",
                 opacity=0.7,
             )
@@ -129,7 +128,7 @@ class Plot:
                 base=reference_line - negative_bars,
                 name="Below Reference",
                 marker_color="crimson",
-                customdata=analysis.loc[analysis["metric"] < reference_line, "metric"],
+                customdata=analysis.loc[analysis < reference_line],
                 hovertemplate="(%{x},%{base:.3f})",
                 opacity=0.7,
             )
@@ -160,7 +159,7 @@ class Plot:
 
     def scatter(
         self,
-        analysis: pd.DataFrame,
+        analysis: Union[pd.Series, np.ndarray, list],
         width: int = 800,
         height: int = 400,
         fig_type: str = None,
@@ -171,6 +170,11 @@ class Plot:
 
         upper_limit = self.statistics.get("upper_limit")
         lower_limit = self.statistics.get("lower_limit")
+        index = (
+            analysis.index
+            if isinstance(analysis, pd.Series)
+            else list(range(len(analysis)))
+        )
 
         def marker_color(y):
             if (upper_limit is not None and y > upper_limit) or (
@@ -183,18 +187,18 @@ class Plot:
 
         fig.add_trace(
             go.Scatter(
-                x=analysis.get("datetime"),
-                y=analysis["metric"],
+                x=index,
+                y=analysis,
                 mode="markers",
                 name="Metric",
-                marker=dict(color=[marker_color(y) for y in analysis["metric"]]),
-            )
+                marker=dict(color=[marker_color(row) for row in analysis]),
+            ),
         )
 
         if self.confidence_interval:
             fig.add_trace(
                 go.Scatter(
-                    x=analysis.get("datetime"),
+                    x=index,
                     y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
                     fill="toself",
                     fillcolor="rgba(0, 100, 255, 0.2)",
