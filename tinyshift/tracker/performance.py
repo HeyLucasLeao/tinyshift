@@ -81,21 +81,25 @@ class PerformanceTracker(BaseModel):
             confidence_interval,
         )
 
-    def score(self, y, y_pred):
+    def score(
+        self,
+        y: Union[pd.Series, List[np.ndarray], List[list]],
+        y_pred: Union[pd.Series, List[np.ndarray], List[list]],
+    ):
         """
-        Compute the evaluation metric for each pair of actual and predicted values.
+        Parameters
+        y : Union[pd.Series, List[np.ndarray], List[list]]
+            The actual target values. Can be a pandas Series or a list of arrays/lists.
+        y_pred : Union[pd.Series, List[np.ndarray], List[list]]
+            The predicted values. Can be a pandas Series or a list of arrays/lists.
 
-        Parameters:
-        ----------
-        y : pd.Series or pd.DataFrame
-            The actual target values.
-        y_pred : pd.Series or pd.DataFrame
-            The predicted values.
+        Returns
+            A pandas Series containing the computed metric for each pair of inputs.
 
-        Returns:
-        -------
-        pd.Series
-            A series containing the computed metric for each pair of inputs.
+        Raises
+        ------
+        ValueError
+            If `y` and `y_pred` do not have the same length.
         """
         if len(y) != len(y_pred):
             raise ValueError("y and y_pred must have the same length.")

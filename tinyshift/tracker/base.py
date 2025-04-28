@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 class BaseModel(ABC):
     def __init__(
         self,
-        reference: pd.DataFrame,
+        reference: pd.Series,
         confidence_level: float,
         statistic: Callable,
         n_resamples: int,
@@ -18,14 +18,14 @@ class BaseModel(ABC):
         confidence_interval: bool,
     ):
         """
-        Initializes the BaseModel class with reference distribution, statistics, and drift limits.
+        Initialize the BaseModel class with reference distribution, statistics, and drift limits.
 
         Parameters
         ----------
-        reference : pd.DataFrame
-            Data containing the reference distribution with a "metric" column.
+        reference : pd.Series
+            Series containing the reference distribution.
         confidence_level : float
-            Desired confidence level for statistical calculations (e.g., 0.95).
+            Confidence level for statistical calculations (e.g., 0.95).
         statistic : Callable
             Function to compute summary statistics (e.g., np.mean).
         n_resamples : int
@@ -37,6 +37,11 @@ class BaseModel(ABC):
         confidence_interval : bool
             Whether to compute confidence intervals for the reference distribution.
         """
+
+        if not 0 < confidence_level <= 1:
+            raise ValueError("confidence_level must be between 0 and 1.")
+        if n_resamples <= 0:
+            raise ValueError("n_resamples must be a positive integer.")
 
         self.confidence_interval = confidence_interval
         self.statistics = self._generate_statistics(
@@ -80,21 +85,11 @@ class BaseModel(ABC):
             "mean": np.mean(data),
         }
 
-    def _validate_columns(
-        self,
-        df: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-    ):
+    def _get_index(self, X: Union[pd.Series, List[np.ndarray], List[list]]):
         """
-        Validates the presence and types of target and datetime columns in a DataFrame.
+        Helper function to retrieve the index of a pandas Series or generate a default index.
         """
-        if target_col not in df.columns:
-            raise KeyError(f"Column {target_col} is not in the DataFrame.")
-        if datetime_col not in df.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(df[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+        return X.index if isinstance(X, pd.Series) else list(range(len(X)))
 
     def _is_drifted(self, data: pd.Series) -> pd.Series:
         """
@@ -133,8 +128,7 @@ class BaseModel(ABC):
         """
         pass
 
-    def predict(self, analysis: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, X: Union[pd.Series, List[np.ndarray], List[list]]) -> pd.Series:
         """Predict drift for each time period in the dataset compared to the reference."""
-        metrics = self.score(analysis)
-
+        metrics = self.score(X)
         return self._is_drifted(metrics)

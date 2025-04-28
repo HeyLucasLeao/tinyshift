@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from .base import BaseModel
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, List
 from ..outlier import *
 
 
@@ -52,14 +52,8 @@ class AnomalyTracker(BaseModel):
             DataFrame containing the anomaly scores.
         """
         self.anomaly_model = anomaly_model
-        if not 0 < confidence_level <= 1:
-            raise ValueError("confidence_level must be between 0 and 1.")
-        if n_resamples <= 0:
-            raise ValueError("n_resamples must be a positive integer.")
+        self.anomaly_scores = self.anomaly_model.decision_scores_
 
-        self.anomaly_scores = pd.DataFrame(
-            self.anomaly_model.decision_scores_, columns=["metric"]
-        )
         super().__init__(
             self.anomaly_scores,
             confidence_level,
@@ -72,24 +66,21 @@ class AnomalyTracker(BaseModel):
 
     def score(
         self,
-        analysis: pd.DataFrame,
+        X: Union[pd.Series, np.ndarray, List[float], List[int]],
     ):
         """
-        Calculate the anomaly scores for the given dataset and determine if there is a drift.
+        Calculate the anomaly scores for the given dataset.
 
-        Parameters:
-        ----------
-        analysis : DataFrame
-            The dataset to analyze for anomalies.
+        This method uses the anomaly detection model to compute scores for the input data,
+        which can be used to identify potential anomalies.
 
-        Returns:
-        -------
-        DataFrame
-            A DataFrame containing the calculated anomaly scores and a boolean
-            indicating whether drift was detected for each record.
+        Parameters
+        X : Union[pd.Series, np.ndarray, List[float], List[int]]
+            The input data for which anomaly scores are to be calculated.
+
+        Returns
+        np.ndarray
+            An array containing the calculated anomaly scores for each record in the input data.
         """
-
-        metrics = pd.DataFrame()
-        metrics["metric"] = self.anomaly_model.decision_function(analysis)
-        metrics["is_drifted"] = self._is_drifted(metrics)
-        return metrics
+        scores = self.anomaly_model.decision_function(X)
+        return pd.Series(scores, index=self._get_index(X))

@@ -98,7 +98,7 @@ class CategoricalDriftTracker(BaseModel):
         """
         Calculates the percent distribution of a categorical column grouped by a specified time period.
         """
-        index = X.index if isinstance(X, pd.Series) else list(range(len(X)))
+        index = self._get_index(X)
         X = np.asanyarray(X)
         freq = [Counter(item) for item in X]
         categories = np.unique(np.concatenate(X))
@@ -117,34 +117,35 @@ class CategoricalDriftTracker(BaseModel):
 
     def _generate_distance(
         self,
-        p: pd.DataFrame,
-    ) -> pd.DataFrame:
+        X: Union[pd.Series, List[np.ndarray], List[list]],
+    ) -> pd.Series:
         """
-        This method calculates a distance metric between consecutive rows of a frequency
-        distribution DataFrame, where rows represent time periods and columns represent
-        categorical values. The distance is computed using a specified function.
+        Calculates a distance metric between consecutive rows of a frequency
+        distribution DataFrame, where rows represent time periods and columns
+        represent categorical values. The distance is computed using a specified
+        function.
 
-        Parameters
-        p : pd.DataFrame
-            A DataFrame representing the frequency distribution, where rows correspond to
-            time periods and columns correspond to categorical values.
+        ----------
+        X : Union[pd.Series, List[np.ndarray], List[list]]
+            A data structure representing the frequency distribution, where rows
+            correspond to time periods and columns correspond to categorical values.
 
-        Returns
-        pd.DataFrame
-            A DataFrame containing two columns:
-            - 'datetime': The datetime values corresponding to the time periods (excluding the first period).
-            - 'metric': The calculated distance metric for each consecutive period.
+        -------
+        pd.Series
+            A Series containing the calculated distance metric for each consecutive
+            period, indexed by the datetime values corresponding to the time periods
+            (excluding the first period).
         """
-        n = p.shape[0]
+        n = X.shape[0]
         distances = np.zeros(n)
-        past_value = np.zeros(p.shape[1], dtype=np.int32)
-        index = p.index[1:]
-        p = np.asarray(p)
+        past_value = np.zeros(X.shape[1], dtype=np.int32)
+        index = X.index[1:]
+        X = np.asarray(X)
 
         for i in range(1, n):
-            past_value = past_value + p[i - 1]
+            past_value = past_value + X[i - 1]
             past_value = past_value / np.sum(past_value)
-            current_value = p[i] / np.sum(p[i])
+            current_value = X[i] / np.sum(X[i])
             dist = self.func(past_value, current_value)
             distances[i] = dist
 

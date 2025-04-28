@@ -99,7 +99,7 @@ class ContinuousDriftTracker(BaseModel):
         self,
         X: Union[pd.Series, List[np.ndarray], List[list]],
         func_name: Callable,
-    ) -> pd.DataFrame:
+    ) -> pd.Series:
         """
         Compute a distance metric over a rolling cumulative window.
 
@@ -141,7 +141,7 @@ class ContinuousDriftTracker(BaseModel):
         """
         reference = np.concatenate(np.asarray(self.reference_distribution))
         func = self._selection_function(self.func)
-        index = X.index if isinstance(X, pd.Series) else list(range(len(X)))
+        index = self._get_index(X)
         X = np.asarray(X)
 
         return pd.Series([func(reference, row) for row in X], index=index)

@@ -3,6 +3,7 @@ import numpy as np
 import plotly.express as px
 import scipy.stats
 import pandas as pd
+from typing import Union
 
 
 class Plot:
@@ -158,7 +159,7 @@ class Plot:
 
     def scatter(
         self,
-        analysis: pd.DataFrame,
+        analysis: Union[pd.Series, np.ndarray, list],
         width: int = 800,
         height: int = 400,
         fig_type: str = None,
@@ -169,6 +170,11 @@ class Plot:
 
         upper_limit = self.statistics.get("upper_limit")
         lower_limit = self.statistics.get("lower_limit")
+        index = (
+            analysis.index
+            if isinstance(analysis, pd.Series)
+            else list(range(len(analysis)))
+        )
 
         def marker_color(y):
             if (upper_limit is not None and y > upper_limit) or (
@@ -181,18 +187,18 @@ class Plot:
 
         fig.add_trace(
             go.Scatter(
-                x=analysis.index,
+                x=index,
                 y=analysis,
                 mode="markers",
                 name="Metric",
-                marker=dict(color=analysis.map(marker_color)),
-            )
+                marker=dict(color=[marker_color(row) for row in analysis]),
+            ),
         )
 
         if self.confidence_interval:
             fig.add_trace(
                 go.Scatter(
-                    x=analysis.index,
+                    x=index,
                     y=[self.statistics["ci_lower"], self.statistics["ci_upper"]],
                     fill="toself",
                     fillcolor="rgba(0, 100, 255, 0.2)",
