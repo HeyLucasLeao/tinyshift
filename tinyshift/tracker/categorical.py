@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import jensenshannon
 from .base import BaseModel
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, List
+from collections import Counter
 
 
 def l_infinity(a, b):
@@ -15,10 +16,7 @@ def l_infinity(a, b):
 class CategoricalDriftTracker(BaseModel):
     def __init__(
         self,
-        reference: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-        period: str,
+        X: Union[pd.Series, List[np.ndarray], List[list]],
         func: str = "l_infinity",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
@@ -29,24 +27,18 @@ class CategoricalDriftTracker(BaseModel):
     ):
         """
         A tracker for identifying drift in categorical data over time. The tracker uses
-        a reference dataset to compute a baseline distribution and compare subsequent data
+        a X dataset to compute a baseline distribution and compares subsequent data
         for deviations based on a distance metric and drift limits.
 
-        Parameters:
+        Parameters
         ----------
-        reference : pd.DataFrame
-            The reference dataset used to compute the baseline distribution.
-        target_col : str
-            The name of the column containing the categorical variable to analyze.
-        datetime_col : str
-            The name of the column containing datetime values for temporal grouping.
-        period : str
-            The frequency for grouping data (e.g., 'D' for daily, 'M' for monthly).
+        X : pd.DataFrame
+            The X dataset used to compute the baseline distribution.
         func : str, optional
             The distance function to use ('l_infinity' or 'jensenshannon').
             Default is 'l_infinity'.
         statistic : Callable, optional
-            The statistic function used to summarize the reference distances.
+            The statistic function used to summarize the X distances.
             Default is `np.mean`.
         confidence_level : float, optional
             The confidence level for calculating statistical thresholds.
@@ -59,39 +51,34 @@ class CategoricalDriftTracker(BaseModel):
             Default is 42.
         drift_limit : Union[str, Tuple[float, float]], optional
             User-defined thresholds for drift detection. If set to "stddev", thresholds
-            are calculated based on the standard deviation of the reference distances.
+            are calculated based on the standard deviation of the X distances.
             Default is "stddev".
         confidence_interval : bool, optional
             Whether to calculate and include confidence intervals in the drift analysis.
             Default is False.
 
-        Attributes:
+        Attributes
         ----------
-        period : str
-            The grouping frequency used for analysis.
         func : Callable
             The distance function used for drift calculation.
-        reference_frequency : pd.DataFrame
-            The frequency distribution of the reference dataset.
+        reference_distribution : np.ndarray
+            The normalized distribution of the reference dataset.
         reference_distance : pd.DataFrame
             The distance metric values for the reference dataset.
         """
 
-        self._validate_columns(reference, target_col, datetime_col)
-        self._validate_params(confidence_level, n_resamples, period)
-
-        self.period = period
         self.func = self._selection_function(func)
 
-        self.reference_frequency = self._calculate_frequency(
-            reference,
-            target_col,
-            datetime_col,
-            period,
+        frequency = self._calculate_frequency(
+            X,
+        )
+
+        self.reference_distribution = frequency.sum(axis=0) / np.sum(
+            frequency.sum(axis=0)
         )
 
         self.reference_distance = self._generate_distance(
-            self.reference_frequency,
+            frequency,
         )
 
         super().__init__(
@@ -106,21 +93,16 @@ class CategoricalDriftTracker(BaseModel):
 
     def _calculate_frequency(
         self,
-        df: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-        period: str,
+        X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.DataFrame:
         """
-        Calculates the frequency distribution of a categorical column grouped by a specified time period.
+        Calculates the percent distribution of a categorical column grouped by a specified time period.
         """
-        freq = (
-            df.groupby([pd.Grouper(key=datetime_col, freq=period), target_col])
-            .size()
-            .unstack(fill_value=0)
-        )
-
-        return freq
+        index = self._get_index(X)
+        X = np.asanyarray(X)
+        freq = [Counter(item) for item in X]
+        categories = np.unique(np.concatenate(X))
+        return pd.DataFrame(freq, columns=categories, index=index)
 
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
@@ -135,80 +117,50 @@ class CategoricalDriftTracker(BaseModel):
 
     def _generate_distance(
         self,
-        p: pd.DataFrame,
-    ) -> pd.DataFrame:
+        X: Union[pd.Series, List[np.ndarray], List[list]],
+    ) -> pd.Series:
         """
-        This method calculates a distance metric between consecutive rows of a frequency
-        distribution DataFrame, where rows represent time periods and columns represent
-        categorical values. The distance is computed using a specified function.
+        Calculates a distance metric between consecutive rows of a frequency
+        distribution DataFrame, where rows represent time periods and columns
+        represent categorical values. The distance is computed using a specified
+        function.
 
-        Parameters
-        p : pd.DataFrame
-            A DataFrame representing the frequency distribution, where rows correspond to
-            time periods and columns correspond to categorical values.
+        ----------
+        X : Union[pd.Series, List[np.ndarray], List[list]]
+            A data structure representing the frequency distribution, where rows
+            correspond to time periods and columns correspond to categorical values.
 
-        Returns
-        pd.DataFrame
-            A DataFrame containing two columns:
-            - 'datetime': The datetime values corresponding to the time periods (excluding the first period).
-            - 'metric': The calculated distance metric for each consecutive period.
+        -------
+        pd.Series
+            A Series containing the calculated distance metric for each consecutive
+            period, indexed by the datetime values corresponding to the time periods
+            (excluding the first period).
         """
-        n = p.shape[0]
+        n = X.shape[0]
         distances = np.zeros(n)
-        past_value = np.zeros(p.shape[1], dtype=np.int32)
-        index = p.index[1:]
-        p = np.asarray(p)
+        past_value = np.zeros(X.shape[1], dtype=np.int32)
+        index = X.index[1:]
+        X = np.asarray(X)
 
         for i in range(1, n):
-            past_value = past_value + p[i - 1]
+            past_value = past_value + X[i - 1]
             past_value = past_value / np.sum(past_value)
-            current_value = p[i] / np.sum(p[i])
+            current_value = X[i] / np.sum(X[i])
             dist = self.func(past_value, current_value)
             distances[i] = dist
 
-        return pd.DataFrame({"datetime": index, "metric": distances[1:]})
+        return pd.Series(distances[1:], index=index)
 
     def score(
         self,
-        analysis: pd.DataFrame,
-        target_col: str,
-        datetime_col: str,
-    ) -> pd.DataFrame:
+        X: Union[pd.Series, List[np.ndarray], List[list]],
+    ) -> pd.Series:
         """
-        Assess drift in the provided dataset by comparing its distribution to the reference.
-
-        Parameters:
-        ----------
-        analysis : DataFrame
-            The dataset to analyze for drift.
-        target_col : str
-            The name of the categorical column in the analysis dataset.
-        datetime_col : str
-            The name of the datetime column in the analysis dataset.
-
-        Returns:
-        -------
-        DataFrame
-            A DataFrame containing metrics and drift detection results for each time period.
+        Compute the drift metric for each time period in the provided dataset.
         """
-        self._validate_columns(analysis, target_col, datetime_col)
-
-        # Calculate frequency and percentage distribution
-        freq = self._calculate_frequency(
-            analysis, target_col, datetime_col, self.period
-        )
+        freq = self._calculate_frequency(X)
         percent = freq.div(freq.sum(axis=1), axis=0)
 
-        # Calculate percentage distribution
-        ref_freq = self.reference_frequency.sum(axis=0)
-        ref_dist = ref_freq / np.sum(ref_freq)
-
-        # Calculate drift metrics for each time period
-        metrics = (
-            percent.apply(lambda row: self.func(row, ref_dist), axis=1)
-            .rename("metric")
-            .reset_index()
+        return percent.apply(
+            lambda row: self.func(row, self.reference_distribution), axis=1
         )
-        metrics["is_drifted"] = self._is_drifted(metrics)
-
-        return metrics
