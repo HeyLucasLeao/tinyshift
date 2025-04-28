@@ -2,13 +2,13 @@ import numpy as np
 import pandas as pd
 from scipy.stats import ks_2samp, wasserstein_distance
 from .base import BaseModel
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, List
 
 
 class ContinuousDriftTracker(BaseModel):
     def __init__(
         self,
-        reference: Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray],
+        X: Union[pd.Series, List[np.ndarray], List[list]],
         func: str = "ws",
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
@@ -19,19 +19,19 @@ class ContinuousDriftTracker(BaseModel):
     ):
         """
         A Tracker for identifying drift in continuous data over time. This tracker uses
-        a reference dataset to compute a baseline distribution and compares subsequent data
+        a X dataset to compute a baseline distribution and compares subsequent data
         for deviations using statistical distance metrics such as the Wasserstein distance
         or the Kolmogorov-Smirnov test.
 
         Parameters
         ----------
-        reference : Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray]
-            The reference dataset used to compute the baseline distribution.
+        X : Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray]
+            The X dataset used to compute the baseline distribution.
         func : str, optional
             The distance function to use ('ws' for Wasserstein distance or 'ks' for Kolmogorov-Smirnov test).
             Default is 'ws'.
         statistic : callable, optional
-            The statistic function used to summarize the reference distance metrics.
+            The statistic function used to summarize the X distance metrics.
             Default is `np.mean`.
         confidence_level : float, optional
             The confidence level for calculating statistical thresholds.
@@ -44,7 +44,7 @@ class ContinuousDriftTracker(BaseModel):
             Default is 42.
         drift_limit : str or tuple, optional
             Defines the threshold for drift detection. If 'stddev', thresholds are based on
-            the standard deviation of the reference metrics. If a tuple, it specifies custom
+            the standard deviation of the X metrics. If a tuple, it specifies custom
             lower and upper thresholds.
             Default is 'stddev'.
         confidence_interval : bool, optional
@@ -62,8 +62,8 @@ class ContinuousDriftTracker(BaseModel):
         """
 
         self.func = func
-        self.reference_distribution = reference
-        self.reference_distance = self._generate_distance(reference, func)
+        self.reference_distribution = X
+        self.reference_distance = self._generate_distance(X, func)
 
         super().__init__(
             self.reference_distance,
@@ -97,32 +97,32 @@ class ContinuousDriftTracker(BaseModel):
 
     def _generate_distance(
         self,
-        p: pd.Series,
+        X: Union[pd.Series, List[np.ndarray], List[list]],
         func_name: Callable,
     ) -> pd.DataFrame:
         """
-        Compute a distance metric (e.g., Kolmogorov-Smirnov test) over a rolling cumulative window.
+        Compute a distance metric over a rolling cumulative window.
 
-        This method calculates a specified statistical distance metric between the cumulative
-        distribution of past values and the current distribution for each period in the input series.
+        This method calculates a specified statistical distance metric (e.g., Kolmogorov-Smirnov test)
+        between the cumulative distribution of past values and the current value for each period in
+        the input series.
 
-        Parameters
-        p : pd.Series
-        func_name : Callable
-            A function or callable that computes the distance metric between two distributions.
+        ----------
+        X : Union[pd.Series, List[np.ndarray], List[list]]
+            The input data series or list of arrays/lists to compute the distance metric on.
 
-        Returns
-        pd.DataFrame
-            A DataFrame containing:
-            - 'datetime': The datetime indices corresponding to each period (excluding the first).
-            - 'metric': The calculated distance metric for each period.
+        -------
+        pd.Series
+            A Series containing:
+            - Index: The datetime indices corresponding to each period (excluding the first).
+            - Values: The calculated distance metric for each period.
         """
         func = self._selection_function(func_name)
 
-        n = p.shape[0]
+        n = X.shape[0]
         values = np.zeros(n)
         past_values = np.array([], dtype=float)
-        index = p.index[1:]
+        index = X.index[1:]
         p = np.asarray(p)
 
         for i in range(1, n):
@@ -134,24 +134,12 @@ class ContinuousDriftTracker(BaseModel):
 
     def score(
         self,
-        analysis: pd.DataFrame,
+        X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.Series:
         """
-        Calculate the drift metric for each time period in the provided dataset.
-
-        Parameters
-        ----------
-        analysis : pd.DataFrame
-            A DataFrame where each row represents a time period and columns represent
-            categorical values. The dataset is compared to the reference distribution
-            to evaluate drift.
-
-        Returns
-        -------
-        pd.Series
-            A Series containing the calculated drift metric for each time period.
+        Compute the drift metric for each time period in the provided dataset.
         """
         reference = np.concatenate(np.asarray(self.reference_distribution))
         func = self._selection_function(self.func)
 
-        return analysis.map(lambda row: func(reference, row))
+        return X.map(lambda row: func(reference, row))

@@ -2,17 +2,14 @@ import numpy as np
 from sklearn.metrics import f1_score
 import pandas as pd
 from .base import BaseModel
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, List
 
 
 class PerformanceTracker(BaseModel):
     def __init__(
         self,
-        reference: pd.DataFrame,
-        target_col: str,
-        prediction_col: str,
-        datetime_col: str,
-        period: str,
+        y: Union[pd.Series, List[np.ndarray], List[list]],
+        y_pred: Union[pd.Series, List[np.ndarray], List[list]],
         metric_score: Callable = f1_score,
         statistic: Callable = np.mean,
         confidence_level: float = 0.997,
@@ -26,18 +23,12 @@ class PerformanceTracker(BaseModel):
         The tracker compares the performance metric across time periods to a reference distribution
         and identifies potential performance degradation.
 
-        Parameters:
+        Parameters
         ----------
-        reference : pd.DataFrame
-            The reference dataset used to compute the baseline metric distribution.
-        target_col : str
-            The name of the column containing the actual target values.
-        prediction_col : str
-            The name of the column containing the predicted values.
-        datetime_col : str
-            The name of the column containing datetime values for temporal grouping.
-        period : str
-            The frequency for grouping data (e.g., 'W' for weekly, 'M' for monthly).
+        y : Union[pd.Series, List[np.ndarray], List[list]]
+            The actual target values. Can be a pandas Series or a list of lists/arrays.
+        y_pred : Union[pd.Series, List[np.ndarray], List[list]]
+            The predicted values. Can be a pandas Series or a list of lists/arrays.
         metric_score : Callable, optional
             The function to compute the evaluation metric (e.g., `f1_score`).
             Default is `f1_score`.
@@ -61,35 +52,25 @@ class PerformanceTracker(BaseModel):
             Whether to calculate confidence intervals for the metric distribution.
             Default is False.
 
-        Attributes:
+        Attributes
         ----------
-        period : str
-            The grouping frequency used for analysis.
         metric_score : Callable
             The evaluation metric function used for tracking performance.
-        reference_distribution : pd.DataFrame
+        reference_distribution : pd.Series
             The performance metric distribution of the reference dataset.
-        """
 
-        self._validate_columns(
-            reference,
-            target_col,
-            datetime_col,
-        )
+        Raises
+        ------
+        TypeError
+            If `metric_score` is not a callable function.
+        """
 
         if not callable(metric_score):
             raise TypeError("metric_score must be a callable function.")
 
-        self.period = period
         self.metric_score = metric_score
 
-        # Initialize distributions and statistics
-        self.reference_distribution = self._calculate_metric(
-            reference,
-            target_col,
-            prediction_col,
-            datetime_col,
-        )
+        self.reference_distribution = self.score(y, y_pred)
         super().__init__(
             self.reference_distribution,
             confidence_level,
@@ -100,82 +81,34 @@ class PerformanceTracker(BaseModel):
             confidence_interval,
         )
 
-    def _calculate_metric(
-        self,
-        df: pd.DataFrame,
-        target_col: str,
-        prediction_col: str,
-        datetime_col: str,
-    ):
+    def score(self, y, y_pred):
         """
-        Calculate the performance metric for each time period in the dataset.
+        Compute the evaluation metric for each pair of actual and predicted values.
 
         Parameters:
         ----------
-        df : DataFrame
-            The dataset containing the data to analyze.
-        target_col : str
-            The name of the column containing the actual target values.
-        prediction_col : str
-            The name of the column containing the predicted values.
-        datetime_col : str
-            The name of the datetime column for temporal grouping.
+        y : pd.Series or pd.DataFrame
+            The actual target values.
+        y_pred : pd.Series or pd.DataFrame
+            The predicted values.
 
         Returns:
         -------
-        DataFrame
-            A DataFrame with the calculated metric for each time period.
+        pd.Series
+            A series containing the computed metric for each pair of inputs.
         """
-        if target_col not in df.columns or prediction_col not in df.columns:
-            raise KeyError(
-                f"Columns {target_col} and/or {prediction_col} are not in the DataFrame."
-            )
-        if datetime_col not in df.columns:
-            raise KeyError(f"Datetime column {datetime_col} is not in the DataFrame.")
-        if not pd.api.types.is_datetime64_any_dtype(df[datetime_col]):
-            raise TypeError(f"Column {datetime_col} must be of datetime type.")
+        if len(y) != len(y_pred):
+            raise ValueError("y and y_pred must have the same length.")
 
-        grouped = df.groupby(pd.Grouper(key=datetime_col, freq=self.period)).apply(
-            lambda x: self.metric_score(x[target_col], x[prediction_col])
+        return pd.Series(
+            [
+                self.metric_score(target, prediction)
+                for target, prediction in zip(y, y_pred)
+            ],
+            index=y.index if isinstance(y, pd.Series) else range(len(y)),
         )
-        return grouped.reset_index(name="metric")
 
-    def score(
-        self,
-        analysis: pd.DataFrame,
-        target_col: str,
-        prediction_col: str,
-        datetime_col: str,
-    ):
-        """
-        Assess model performance over time by calculating the evaluation metric
-        for each time period and comparing it to the reference distribution.
-
-        Parameters:
-        ----------
-        analysis : DataFrame
-            The dataset to analyze for performance drift.
-        target_col : str
-            The name of the column containing the actual target values.
-        prediction_col : str
-            The name of the column containing the predicted values.
-        datetime_col : str
-            The name of the datetime column for temporal grouping.
-
-        Returns:
-        -------
-        DataFrame
-            A DataFrame containing datetime values, calculated metrics, and a boolean
-            indicating whether performance drift was detected for each time period.
-        """
-
-        self._validate_columns(analysis, target_col, datetime_col)
-
-        if analysis.empty:
-            raise ValueError("Input DataFrame is empty.")
-
-        metrics = self._calculate_metric(
-            analysis, target_col, prediction_col, datetime_col
-        )
-        metrics["is_drifted"] = self._is_drifted(metrics)
-        return metrics
+    def predict(self, y, y_pred) -> pd.DataFrame:
+        """Predict drift for each time period in the dataset compared to the reference."""
+        metrics = self.score(y, y_pred)
+        return self._is_drifted(metrics)

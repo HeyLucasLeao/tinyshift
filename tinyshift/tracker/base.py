@@ -1,6 +1,6 @@
 from ..plot import plot
 import numpy as np
-from typing import Callable, Union, Tuple
+from typing import Callable, Union, Tuple, List
 import pandas as pd
 from ..stats import StatisticalInterval, BootstrapBCA
 from abc import ABC, abstractmethod
@@ -98,37 +98,38 @@ class BaseModel(ABC):
 
     def _is_drifted(self, data: pd.Series) -> pd.Series:
         """
-        Checks if metrics in the DataFrame are outside specified limits
-        and returns the drift status.
-        """
-        is_drifted = pd.Series([False] * len(data))
+        Checks if metrics in the Series are outside specified limits
+        and returns the drift status as a boolean Series.
 
-        if self.statistics["lower_limit"] is not None:
-            is_drifted = data <= self.statistics["lower_limit"]
-        if self.statistics["upper_limit"] is not None:
-            is_drifted = data >= self.statistics["upper_limit"]
+        Parameters
+        ----------
+        data : pd.Series
+            A Series containing the metrics to be checked against the drift limits.
+
+        Returns
+        -------
+        pd.Series
+            A boolean Series indicating whether each metric is drifted (True) or not (False).
+        """
+        is_drifted = pd.Series(False, index=data.index, dtype=bool)
+
+        lower_limit = self.statistics.get("lower_limit")
+        upper_limit = self.statistics.get("upper_limit")
+
+        if lower_limit is not None:
+            is_drifted |= data <= lower_limit
+        if upper_limit is not None:
+            is_drifted |= data >= upper_limit
 
         return is_drifted
 
     @abstractmethod
     def score(
         self,
-        analysis: pd.DataFrame,
+        X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.Series:
         """
-        Calculate the drift metric for each time period in the provided dataset.
-
-        Parameters
-        ----------
-        analysis : pd.DataFrame
-            A DataFrame where each row represents a time period and columns represent
-            categorical values. The dataset is compared to the reference distribution
-            to evaluate drift.
-
-        Returns
-        -------
-        pd.Series
-            A Series containing the calculated drift metric for each time period.
+        Compute the drift metric for each time period in the provided dataset.
         """
         pass
 
