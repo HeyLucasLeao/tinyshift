@@ -1,3 +1,3 @@
-from .utils import chebyshev_guaranteed_percentage
+from .utils import chebyshev_guaranteed_percentage, hampel_filter
 from .statistical_interval import StatisticalInterval
 from .bootstrap_bca import BootstrapBCA
