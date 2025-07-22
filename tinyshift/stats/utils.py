@@ -1,5 +1,7 @@
 import numpy as np
-from typing import Union, List
+from typing import Union, List, Tuple
+import scipy
+import math
 
 
 def chebyshev_guaranteed_percentage(X, interval):
@@ -131,3 +133,87 @@ def hampel_filter(
             is_outlier[idx] = True
 
     return is_outlier
+
+
+def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
+    """
+    Calculate the Hurst exponent using a rescaled range (R/S) analysis approach with p-value for random walk hypothesis.
+
+    The Hurst exponent is a measure of long-term memory of time series. It relates
+    to the autocorrelations of the time series and the rate at which these decrease
+    as the lag between pairs of values increases.
+
+    Parameters
+    ----------
+    X : Union[np.ndarray, List[float]]
+        Input 1D time series data for which to calculate the Hurst exponent.
+        Must contain at least 30 samples.
+
+    Returns
+    -------
+    Tuple[float, float]
+        (Hurst exponent, p-value for H=0.5 hypothesis)
+        The estimated Hurst exponent value. Interpretation:
+        - 0 < H < 0.5: Mean-reverting (anti-persistent) series
+        - H = 0.5: Geometric Brownian motion (random walk)
+        - 0.5 < H < 1: Trending (persistent) series with long-term memory
+        - H = 1: Perfectly trending series
+        p-value interpretation:
+        - p < threshold: Reject random walk hypothesis (significant persistence/mean-reversion)
+        - p >= threshold: Cannot reject random walk hypothesis
+
+    Raises
+    ------
+    ValueError
+        If input data has less than 30 samples (insufficient for reliable estimation).
+    TypeError
+        If input is not a list or numpy array.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    rolling = np.diff(X)
+    size = len(rolling)
+
+    if size < 30:
+        raise ValueError("Insufficient data points (minimum 30 required)")
+
+    def _calculate_rescaled_ranges(
+        rolling: np.ndarray, window_sizes: List[int]
+    ) -> np.ndarray:
+        """Helper function to calculate rescaled ranges (R/S) for each window size."""
+        r_s = np.zeros(len(window_sizes), dtype=np.float64)
+
+        for i, window_size in enumerate(window_sizes):
+            n_windows = len(rolling) // window_size
+            truncated_size = n_windows * window_size
+
+            windows = rolling[:truncated_size].reshape(n_windows, window_size)
+
+            means = np.mean(windows, axis=1, keepdims=True)
+            std_devs = np.std(windows, axis=1, ddof=1)
+            demeaned = windows - means
+            cumulative_sums = np.cumsum(demeaned, axis=1)
+            ranges = np.max(cumulative_sums, axis=1) - np.min(cumulative_sums, axis=1)
+
+            r_s[i] = np.mean(ranges / std_devs)
+
+        return r_s
+
+    def _hypothesis_test_random_walk(hurst: float, se: float, n: int) -> float:
+        """Helper function to test if Hurst exponent is significantly different from random_walk (0.5)"""
+        random_walk = 0.5
+        t_stat = (hurst - random_walk) / se
+        ddof = n - 2
+        return 2 * scipy.stats.t.sf(abs(t_stat), ddof)
+
+    max_power = int(np.floor(math.log2(size)))
+    window_sizes = [2**power for power in range(1, max_power + 1)]
+
+    rescaled_ranges = _calculate_rescaled_ranges(rolling, window_sizes)
+
+    log_sizes = np.log(window_sizes)
+    log_r_s = np.log(rescaled_ranges)
+    slope, _, _, _, se = scipy.stats.linregress(log_sizes, log_r_s)
+
+    p_value = _hypothesis_test_random_walk(slope, se, len(window_sizes))
+
+    return float(slope), float(p_value)
