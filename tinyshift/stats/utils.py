@@ -250,6 +250,12 @@ def foreca(X: Union[np.ndarray, List[float]]) -> float:
     4. Normalizing against maximum possible entropy
     5. Subtracting from 1 to get forecastability measure
 
+    References
+    ----------
+    [1] Goerg (2013), "Forecastable Component Analysis" (JMLR)
+    [2] Hyndman et al. (2015), "Large unusual observations in time series"
+    [3] Manokhin (2025), "Mastering Modern Time Series Forecasting: The Complete Guide to
+        Statistical, Machine Learning & Deep Learning Models in Python", Ch. 2.4.12
     """
     _, psd = periodogram(X)
     psd = psd / np.sum(psd)
