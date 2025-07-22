@@ -2,6 +2,7 @@ import numpy as np
 from typing import Union, List, Tuple
 import scipy
 import math
+from scipy.signal import periodogram
 
 
 def chebyshev_guaranteed_percentage(X, interval):
@@ -217,3 +218,42 @@ def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
     p_value = _hypothesis_test_random_walk(slope, se, len(window_sizes))
 
     return float(slope), float(p_value)
+
+
+def foreca(X: Union[np.ndarray, List[float]]) -> float:
+    """
+    Calculate the Forecastable Component Analysis (ForeCA) omega index for a given signal.
+
+    The omega index (ω) measures how forecastable a time series is, ranging from 0
+    (completely noisy/unforecastable) to 1 (perfectly forecastable). It is based on
+    the spectral entropy of the signal's power spectral density (PSD).
+
+    Parameters
+    ----------
+    X : Union[np.ndarray, List[float]]
+        Input 1D time series data for which to calculate the forecastability measure.
+        The signal should be stationary for meaningful results.
+
+    Returns
+    -------
+    float
+        The omega forecastability index (ω), where:
+        - ω ≈ 0: Signal is noise-like and not forecastable
+        - ω ≈ 1: Signal has strong periodic components and is highly forecastable
+
+    Notes
+    -----
+    The calculation involves:
+    1. Computing the power spectral density (PSD) via periodogram
+    2. Normalizing the PSD to sum to 1 (creating a probability distribution)
+    3. Calculating the spectral entropy of this distribution
+    4. Normalizing against maximum possible entropy
+    5. Subtracting from 1 to get forecastability measure
+
+    """
+    _, psd = periodogram(X)
+    psd = psd / np.sum(psd)
+    entropy = -np.sum(psd * np.log2(psd + 1e-12))
+    max_entropy = np.log2(len(psd))
+    omega = 1 - (entropy / max_entropy)
+    return float(omega)
