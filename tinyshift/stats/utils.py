@@ -173,7 +173,7 @@ def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
     rolling = np.diff(X)
     size = len(rolling)
 
-    if size < 30:
+    if 30 > len(X):
         raise ValueError("Insufficient data points (minimum 30 required)")
 
     def _calculate_rescaled_ranges(
