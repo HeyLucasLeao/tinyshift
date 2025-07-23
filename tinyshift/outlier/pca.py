@@ -120,5 +120,5 @@ class PCAReconstructionError:
             raise ValueError("Model must be fitted before prediction.")
         X = check_array(X)
         scores = self.decision_function(X)
-        threshold = np.quantile(self.decision_scores_, quantile)
+        threshold = np.quantile(self.decision_scores_, quantile, method="higher")
         return scores > threshold
