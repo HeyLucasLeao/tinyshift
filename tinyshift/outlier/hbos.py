@@ -15,6 +15,16 @@ class HBOS(BaseHistogramModel):
     ----------
     Goldstein, Markus & Dengel, Andreas. (2012). Histogram-based Outlier Score (HBOS): A fast Unsupervised Anomaly Detection Algorithm.
     https://www.researchgate.net/publication/231614824_Histogram-based_Outlier_Score_HBOS_A_fast_Unsupervised_Anomaly_Detection_Algorithm
+
+    Notes
+    -----
+    - Higher HBOS scores indicate more anomalous observations
+    - To determine outliers:
+      1. Compute scores using decision_function()
+      2. Consider points with scores above the 95th percentile as outliers (or adjust threshold)
+      3. Or use: np.percentile(scores, 95) as automatic threshold
+    - Works best when features are approximately independent
+    - Very efficient for high-dimensional data
     """
 
     def __init__(self):
@@ -106,4 +116,36 @@ class HBOS(BaseHistogramModel):
         for i in range(self.n_features):
             outlier_scores[:, i] = self._compute_outlier_score(X, i)
 
-        return np.sum(outlier_scores, axis=1).ravel() * -1
+        return np.sum(outlier_scores, axis=1).ravel()
+
+    def predict(self, X: np.ndarray, quantile: float = 0.99) -> np.ndarray:
+        """
+        Identify outliers based on HBOS scores.
+
+        Parameters
+        ----------
+        X : ndarray of shape (n_samples, n_features)
+            Data to evaluate.
+        quantile : float, default=0.99
+
+        Returns
+        -------
+        outliers : ndarray of shape (n_samples,)
+            Boolean array where True indicates an outlier.
+
+        Raises
+        ------
+        ValueError
+            If model hasn't been fitted yet.
+
+        Notes
+        -----
+        - Following the original HBOS paper, higher scores indicate more anomalous observations
+        """
+        if self.decision_scores_ is None:
+            raise ValueError("Model must be fitted before prediction.")
+
+        X = check_array(X)
+        scores = self.decision_function(X)
+        threshold = np.quantile(self.decision_scores_, quantile, method="higher")
+        return scores > threshold
