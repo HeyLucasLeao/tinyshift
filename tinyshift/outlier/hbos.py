@@ -19,10 +19,6 @@ class HBOS(BaseHistogramModel):
     Notes
     -----
     - Higher HBOS scores indicate more anomalous observations
-    - To determine outliers:
-      1. Compute scores using decision_function()
-      2. Consider points with scores above the 95th percentile as outliers (or adjust threshold)
-      3. Or use: np.percentile(scores, 95) as automatic threshold
     - Works best when features are approximately independent
     - Very efficient for high-dimensional data
     """

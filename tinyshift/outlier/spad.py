@@ -37,10 +37,6 @@ class SPAD(BaseHistogramModel):
     Notes
     -----
     - Lower SPAD scores indicate more anomalous observations (log-probabilities)
-    - To determine outliers:
-      1. Compute scores using decision_function()
-      2. Consider points with scores below the 5th percentile as outliers
-      3. Or use: np.percentile(scores, 5) as automatic threshold
     - SPAD+ (plus=True) better detects multivariate anomalies by capturing feature correlations
     - Includes Laplace smoothing for probability estimation
     """
