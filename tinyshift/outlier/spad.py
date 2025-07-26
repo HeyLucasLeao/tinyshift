@@ -33,6 +33,16 @@ class SPAD(BaseHistogramModel):
 
     Aryal, Sunil & Agrahari Baniya, Arbind & Santosh, Kc. (2019). Improved histogram-based anomaly detector with the extended principal component features.
     https://www.researchgate.net/publication/336132587_Improved_histogram-based_anomaly_detector_with_the_extended_principal_component_features
+
+    Notes
+    -----
+    - Lower SPAD scores indicate more anomalous observations (log-probabilities)
+    - To determine outliers:
+      1. Compute scores using decision_function()
+      2. Consider points with scores below the 5th percentile as outliers
+      3. Or use: np.percentile(scores, 5) as automatic threshold
+    - SPAD+ (plus=True) better detects multivariate anomalies by capturing feature correlations
+    - Includes Laplace smoothing for probability estimation
     """
 
     def __init__(self, plus=False):
@@ -154,3 +164,33 @@ class SPAD(BaseHistogramModel):
         if self.plus:
             X = np.concatenate((X, self.pca_model.transform(X)), axis=1)
         return self._compute_decision_scores(X)
+
+    def predict(self, X: np.ndarray, quantile: float = 0.01) -> np.ndarray:
+        """
+        Identify outliers based on SPAD anomaly scores.
+
+        Parameters
+        ----------
+        X : ndarray of shape (n_samples, n_features)
+            Data to evaluate.
+        quantile : float, default=0.01
+            Threshold quantile for outlier detection.
+
+        Raises
+        ------
+        ValueError
+            If model hasn't been fitted yet.
+
+        Notes
+        -----
+        - The threshold is computed from the training scores using np.quantile.
+        - Lower SPAD scores indicate more anomalous instances (log-probability sums).
+        """
+
+        if self.decision_scores_ is None:
+            raise ValueError("Model must be fitted before prediction.")
+
+        X = check_array(X)
+        scores = self.decision_function(X)
+        threshold = np.quantile(self.decision_scores_, quantile, method="higher")
+        return scores < threshold
