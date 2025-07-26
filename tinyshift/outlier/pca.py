@@ -115,9 +115,16 @@ class PCAReconstructionError:
         ------
         ValueError
             If model hasn't been fitted yet.
+
+        Notes
+        -----
+        - The threshold is computed as the specified quantile of the reconstruction errors.
+        - Higher reconstruction errors indicate more anomalous observations.
         """
-        if self.decision_scores_ is None:
+
+        if self.PCA is None:
             raise ValueError("Model must be fitted before prediction.")
+
         X = check_array(X)
         scores = self.decision_function(X)
         threshold = np.quantile(self.decision_scores_, quantile, method="higher")
