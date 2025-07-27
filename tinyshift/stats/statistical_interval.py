@@ -50,6 +50,19 @@ class StatisticalInterval:
         return StatisticalInterval.calculate_interval(data, np.median, mad)
 
     @staticmethod
+    def quantile_interval(
+        data: np.ndarray, lower: float, upper: float
+    ) -> Tuple[float, float]:
+        """Calculates interval using quantiles."""
+        lower_bound = (
+            np.quantile(data, lower, method="higher") if lower is not None else None
+        )
+        upper_bound = (
+            np.quantile(data, upper, method="higher") if upper is not None else None
+        )
+        return (lower_bound, upper_bound)
+
+    @staticmethod
     def compute_interval(
         data: np.ndarray,
         method: Union[str, Callable, Tuple[float]],
@@ -70,7 +83,6 @@ class StatisticalInterval:
             Tuple[float, float]: Lower and upper bounds.
         """
         data = np.asarray(data)
-
         if isinstance(method, str):
             if method == "stddev":
                 lower_bound, upper_bound = StatisticalInterval.stddev_interval(data)
@@ -84,6 +96,11 @@ class StatisticalInterval:
             lower_bound, upper_bound = StatisticalInterval.custom_interval(data, method)
         elif isinstance(method, tuple) and len(method) == 2:
             lower_bound, upper_bound = method
+        elif isinstance(method, tuple) and len(method) == 3 and method[0] == "quantile":
+            lower, upper = method[1], method[2]
+            lower_bound, upper_bound = StatisticalInterval.quantile_interval(
+                data, lower, upper
+            )
         else:
             raise ValueError("Invalid method specification.")
 
