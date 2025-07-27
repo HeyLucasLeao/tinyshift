@@ -89,7 +89,7 @@ class BaseModel(ABC):
         """
         Helper function to retrieve the index of a pandas Series or generate a default index.
         """
-        return X.index if isinstance(X, pd.Series) else list(range(len(X)))
+        return X.index if hasattr(X, "index") else list(range(len(X)))
 
     def _is_drifted(self, data: pd.Series) -> pd.Series:
         """
