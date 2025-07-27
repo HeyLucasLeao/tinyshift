@@ -13,6 +13,15 @@ def l_infinity(a, b):
     return np.max(np.abs(a - b))
 
 
+def psi(observed, expected, epsilon=1e-4):
+    """
+    Calculate Population Stability Index (PSI) between two distributions.
+    """
+    observed = np.clip(observed, epsilon, 1)
+    expected = np.clip(expected, epsilon, 1)
+    return np.sum((observed - expected) * np.log(observed / expected))
+
+
 class CategoricalDriftTracker(BaseModel):
     def __init__(
         self,
@@ -24,6 +33,7 @@ class CategoricalDriftTracker(BaseModel):
         random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
         confidence_interval: bool = False,
+        cumulative: bool = True,
     ):
         """
         A tracker for identifying drift in categorical data over time. The tracker uses
@@ -56,6 +66,16 @@ class CategoricalDriftTracker(BaseModel):
         confidence_interval : bool, optional
             Whether to calculate and include confidence intervals in the drift analysis.
             Default is False.
+        cumulative : bool, optional
+            - Cumulative (True): calculates distances cumulatively (aggregating past data).
+                Best for detecting gradual drift over time and smoothing out high-variance data. Useful for monitoring long-term trends.
+            - Non-cumulative (False): Best for detecting abrupt changes and when
+                Analyzing periods independently. More sensitive to single-period anomalies.
+
+            For high-variance data:
+            - Use cumulative mode to reduce noise from sporadic fluctuations
+            - Use non-cumulative mode if you need immediate detection of outliers
+            Default is True.
 
         Attributes
         ----------
@@ -66,7 +86,7 @@ class CategoricalDriftTracker(BaseModel):
         reference_distance : pd.DataFrame
             The distance metric values for the reference dataset.
         """
-
+        self.cumulative = cumulative
         self.func = self._selection_function(func)
 
         frequency = self._calculate_frequency(
@@ -111,6 +131,8 @@ class CategoricalDriftTracker(BaseModel):
             selected_func = l_infinity
         elif func_name == "jensenshannon":
             selected_func = jensenshannon
+        elif func_name == "psi":
+            selected_func = psi
         else:
             raise ValueError(f"Unsupported distance function: {func_name}")
         return selected_func
@@ -136,20 +158,25 @@ class CategoricalDriftTracker(BaseModel):
             period, indexed by the datetime values corresponding to the time periods
             (excluding the first period).
         """
-        n = X.shape[0]
+        n = len(X)
         distances = np.zeros(n)
-        past_value = np.zeros(X.shape[1], dtype=np.int32)
-        index = X.index[1:]
+        index = self._get_index(X)
         X = np.asarray(X)
 
-        for i in range(1, n):
-            past_value = past_value + X[i - 1]
-            past_value = past_value / np.sum(past_value)
-            current_value = X[i] / np.sum(X[i])
-            dist = self.func(past_value, current_value)
-            distances[i] = dist
-
-        return pd.Series(distances[1:], index=index)
+        if self.cumulative:
+            past_value = np.zeros(X.shape[1], dtype=np.int32)
+            for i in range(1, n):
+                past_value = past_value + X[i - 1]
+                past_value = past_value / np.sum(past_value)
+                current_value = X[i] / np.sum(X[i])
+                dist = self.func(past_value, current_value)
+                distances[i] = dist
+            return pd.Series(distances[1:], index=index[1:])
+        else:
+            for i in range(n):
+                current_value = X[i] / np.sum(X[i])
+                distances[i] = self.func(current_value, self.reference_distribution)
+            return pd.Series(distances, index=index)
 
     def score(
         self,
