@@ -16,50 +16,55 @@ class ContinuousDriftTracker(BaseModel):
         random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
         confidence_interval: bool = False,
+        cumulative: bool = True,
     ):
         """
-        A Tracker for identifying drift in continuous data over time. This tracker uses
-        a X dataset to compute a baseline distribution and compares subsequent data
-        for deviations using statistical distance metrics such as the Wasserstein distance
-        or the Kolmogorov-Smirnov test.
+        A Tracker for identifying drift in continuous data over time using statistical distance metrics.
 
         Parameters
         ----------
-        X : Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray]
-            The X dataset used to compute the baseline distribution.
+        X : Union[pd.Series, List[np.ndarray], List[list]]
+            Input continuous data. For time series, each element represents a period's
+            continuous observations.
         func : str, optional
-            The distance function to use ('ws' for Wasserstein distance or 'ks' for Kolmogorov-Smirnov test).
-            Default is 'ws'.
+            Distance function: 'ws' (default) or 'ks'.
         statistic : callable, optional
-            The statistic function used to summarize the X distance metrics.
-            Default is `np.mean`.
+            Statistic function to summarize the distance metrics (e.g., np.mean, np.median).
+            Default is np.mean.
         confidence_level : float, optional
-            The confidence level for calculating statistical thresholds.
+            Confidence level for statistical thresholds (e.g., 0.997 for 3σ).
             Default is 0.997.
         n_resamples : int, optional
             Number of resamples for bootstrapping when calculating statistics.
             Default is 1000.
         random_state : int, optional
-            Seed for reproducibility of random resampling.
+            Seed for reproducible resampling.
             Default is 42.
         drift_limit : str or tuple, optional
-            Defines the threshold for drift detection. If 'stddev', thresholds are based on
-            the standard deviation of the X metrics. If a tuple, it specifies custom
-            lower and upper thresholds.
+            Drift threshold definition:
+            - 'stddev': thresholds based on standard deviation of reference metrics
+            - tuple: custom (lower, upper) thresholds
             Default is 'stddev'.
         confidence_interval : bool, optional
-            Whether to calculate confidence intervals for the drift metrics.
+            Whether to compute bootstrap CIs.
             Default is False.
+        cumulative : bool, optional
+            - True (cumulative): Aggregates past data for each comparison. Better for gradual drift
+              and noisy data. Computationally efficient (O(n)).
+            - False (jackknife): Leave-one-out approach. Better for point anomalies but
+              computationally intensive (O(n²)).
+            Default is True.
 
         Attributes
         ----------
-        func : str
-            The selected distance function ('ws' or 'ks').
-        reference_distribution : Union[pd.Series, pd.core.groupby.SeriesGroupBy, list, np.ndarray]
-            The reference dataset used to compute the baseline distribution.
-        reference_distance : DataFrame
-            The calculated distance metrics for the reference dataset.
+        reference_distribution : ArrayLike
+            The reference dataset used as baseline.
+        reference_distance : pd.Series
+            Calculated distance metrics for the reference dataset.
+        func : Callable
+            The selected distance function (_wasserstein or _ks).
         """
+        self.cumulative = cumulative
         self.func = func
         self.func = self._selection_function(func)
         self.reference_distribution = X
@@ -100,40 +105,57 @@ class ContinuousDriftTracker(BaseModel):
         X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.Series:
         """
-        Compute a distance metric over a rolling cumulative window.
+        Compute a distance metric over a rolling cumulative window or using a jackknife approach.
 
-        This method calculates a specified statistical distance metric (e.g., Kolmogorov-Smirnov test)
-        between the cumulative distribution of past values and the current value for each period in
-        the input series.
+        - **Cumulative mode (cumulative=True)**:
+            For each point, compares it against *all past data* (aggregated up to that point).
+            Best for detecting gradual drift over time.
 
+        - **Jackknife mode (cumulative=False)**:
+            For each point, compares it against *all other points* (leave-one-out approach).
+            This provides a more isolated measure of drift at each timestep but is computationally
+            more intensive. Useful for detecting point-wise anomalies or when independence between
+            periods is assumed.
+
+        Parameters
         ----------
         X : Union[pd.Series, List[np.ndarray], List[list]]
-            The input data series or list of arrays/lists to compute the distance metric on.
+            Input data to compute distances. If Series, uses its index for the output.
 
+        Returns
         -------
         pd.Series
-            A Series containing:
-            - Index: The datetime indices corresponding to each period (excluding the first).
-            - Values: The calculated distance metric for each period.
+            Series with the calculated distances. The index matches the input (excluding the first
+            point in cumulative mode).
         """
         n = len(X)
         distances = np.zeros(n)
         index = self._get_index(X)
         X = np.asarray(X)
 
-        past_values = np.array([], dtype=float)
-        for i in range(1, n):
-            past_values = np.concatenate([past_values, X[i - 1]])
-            value = self.func(past_values, X[i])
-            distances[i] = value
-        return pd.Series(distances[1:], index=index[1:])
+        if self.cumulative:
+            past_value = np.array([], dtype=float)
+            for i in range(1, n):
+                past_value = np.concatenate([past_value, X[i - 1]])
+                value = self.func(past_value, X[i])
+                distances[i] = value
+            return pd.Series(distances[1:], index=index[1:])
+
+        for i in range(n):
+            past_value = np.concatenate(np.delete(np.asarray(X), i, axis=0))
+            distances[i] = self.func(
+                past_value,
+                X[i],
+            )
+
+        return pd.Series(distances, index=index)
 
     def score(
         self,
         X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.Series:
         """
-        Compute the drift metric for each time period in the provided dataset.
+        Compute the drift metric between the reference distribution and new data points.
         """
         reference = np.concatenate(np.asarray(self.reference_distribution))
         index = self._get_index(X)
