@@ -5,7 +5,9 @@ import math
 from scipy.signal import periodogram
 
 
-def chebyshev_guaranteed_percentage(X, interval):
+def chebyshev_guaranteed_percentage(
+    X: Union[np.ndarray, List[float]], interval: Union[np.ndarray, List[float]]
+) -> float:
     """
     Computes the minimum percentage of data within a given interval using Chebyshev's inequality.
 
@@ -44,7 +46,7 @@ def chebyshev_guaranteed_percentage(X, interval):
     if upper is not None:
         k_upper = (upper - mu) / std
         k_values.append(k_upper)
-    k = min(k_values)
+    k = float(min(k_values))
     return 1 - (1 / (k**2)) if k > 1 else 0
 
 
