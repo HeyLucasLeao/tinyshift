@@ -40,41 +40,44 @@ class CategoricalDriftTracker(BaseModel):
         a X dataset to compute a baseline distribution and compares subsequent data
         for deviations based on a distance metric and drift limits.
 
+        Available distance metrics:
+        - 'l_infinity': Maximum absolute difference between category probabilities
+        - 'jensenshannon': Jensen-Shannon divergence (symmetric, sqrt of JS distance)
+        - 'psi': Population Stability Index (sensitive to small probability changes)
+
         Parameters
         ----------
-        X : pd.DataFrame
-            The X dataset used to compute the baseline distribution.
+        X : Union[pd.Series, List[np.ndarray], List[list]]
+            Input categorical data. For time series, each element represents a period's
+            categorical observations.
         func : str, optional
-            The distance function to use ('l_infinity' or 'jensenshannon').
+            Distance metric: 'l_infinity' (default), 'jensenshannon', or 'psi'.
             Default is 'l_infinity'.
         statistic : Callable, optional
-            The statistic function used to summarize the X distances.
-            Default is `np.mean`.
+            Statistic function to summarize the distance metrics (e.g., np.mean, np.median).
+            Default is np.mean.
         confidence_level : float, optional
-            The confidence level for calculating statistical thresholds.
+            Confidence level for statistical thresholds (e.g., 0.997 for 3σ).
             Default is 0.997.
         n_resamples : int, optional
             Number of resamples for bootstrapping when calculating statistics.
             Default is 1000.
         random_state : int, optional
-            Seed for reproducibility of random resampling.
+            Seed for reproducible bootstrapping.
             Default is 42.
         drift_limit : Union[str, Tuple[float, float]], optional
-            User-defined thresholds for drift detection. If set to "stddev", thresholds
-            are calculated based on the standard deviation of the X distances.
-            Default is "stddev".
+            Drift threshold definition:
+            - 'stddev': thresholds based on standard deviation of reference metrics
+            - tuple: custom (lower, upper) thresholds
+            Default is 'stddev'.
         confidence_interval : bool, optional
-            Whether to calculate and include confidence intervals in the drift analysis.
+            Whether to compute bootstrap CIs.
             Default is False.
         cumulative : bool, optional
-            - Cumulative (True): calculates distances cumulatively (aggregating past data).
-                Best for detecting gradual drift over time and smoothing out high-variance data. Useful for monitoring long-term trends.
-            - Non-cumulative (False): Best for detecting abrupt changes and when
-                Analyzing periods independently. More sensitive to single-period anomalies.
-
-            For high-variance data:
-            - Use cumulative mode to reduce noise from sporadic fluctuations
-            - Use non-cumulative mode if you need immediate detection of outliers
+            - True (cumulative): Aggregates past data for each comparison. Better for gradual drift
+              and noisy data. Computationally efficient (O(n)).
+            - False (jackknife): Leave-one-out approach. Better for point anomalies but
+              computationally intensive (O(n²)).
             Default is True.
 
         Attributes
@@ -82,9 +85,9 @@ class CategoricalDriftTracker(BaseModel):
         func : Callable
             The distance function used for drift calculation.
         reference_distribution : np.ndarray
-            The normalized distribution of the reference dataset.
-        reference_distance : pd.DataFrame
-            The distance metric values for the reference dataset.
+            Normalized probability distribution of reference categories
+        reference_distance : pd.Series
+            Calculated distances between reference periods
         """
         self.cumulative = cumulative
         self.func = self._selection_function(func)
@@ -142,21 +145,30 @@ class CategoricalDriftTracker(BaseModel):
         X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.Series:
         """
-        Calculates a distance metric between consecutive rows of a frequency
-        distribution DataFrame, where rows represent time periods and columns
-        represent categorical values. The distance is computed using a specified
-        function.
+        Compute a distance metric over a rolling cumulative window or using a jackknife approach.
 
+        - **Cumulative mode (cumulative=True)**:
+            For each point, compares it against *all past data* (aggregated up to that point).
+            Best for detecting gradual drift over time.
+
+        - **Jackknife mode (cumulative=False)**:
+            For each point, compares it against *all other points* (leave-one-out approach).
+            This provides a more isolated measure of drift at each timestep but is computationally
+            more intensive. Useful for detecting point-wise anomalies or when independence between
+            periods is assumed.
+
+        Parameters
         ----------
         X : Union[pd.Series, List[np.ndarray], List[list]]
-            A data structure representing the frequency distribution, where rows
-            correspond to time periods and columns correspond to categorical values.
+            Frequency counts of categories per period. Rows = time periods,
+            columns = categories.
 
+        Returns
         -------
         pd.Series
-            A Series containing the calculated distance metric for each consecutive
-            period, indexed by the datetime values corresponding to the time periods
-            (excluding the first period).
+            Distance metrics indexed by time period. Note:
+            - Cumulative mode: First period is dropped (no reference)
+            - Jackknife mode: All periods included
         """
         n = len(X)
         distances = np.zeros(n)
@@ -172,18 +184,24 @@ class CategoricalDriftTracker(BaseModel):
                 dist = self.func(past_value, current_value)
                 distances[i] = dist
             return pd.Series(distances[1:], index=index[1:])
-        else:
-            for i in range(n):
-                current_value = X[i] / np.sum(X[i])
-                distances[i] = self.func(current_value, self.reference_distribution)
-            return pd.Series(distances, index=index)
+
+        for i in range(n):
+            current_value = X[i] / np.sum(X[i])
+            past_value = np.delete(X, i, axis=0)
+            past_value = past_value.sum(axis=0) / np.sum(past_value.sum(axis=0))
+            distances[i] = self.func(
+                past_value,
+                current_value,
+            )
+
+        return pd.Series(distances, index=index)
 
     def score(
         self,
         X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.Series:
         """
-        Compute the drift metric for each time period in the provided dataset.
+        Compute the drift metric between the reference distribution and new data points.
         """
         freq = self._calculate_frequency(X)
         percent = freq.div(freq.sum(axis=1), axis=0)
