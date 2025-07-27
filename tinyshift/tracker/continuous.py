@@ -60,10 +60,10 @@ class ContinuousDriftTracker(BaseModel):
         reference_distance : DataFrame
             The calculated distance metrics for the reference dataset.
         """
-
         self.func = func
+        self.func = self._selection_function(func)
         self.reference_distribution = X
-        self.reference_distance = self._generate_distance(X, func)
+        self.reference_distance = self._generate_distance(X)
 
         super().__init__(
             self.reference_distance,
@@ -98,7 +98,6 @@ class ContinuousDriftTracker(BaseModel):
     def _generate_distance(
         self,
         X: Union[pd.Series, List[np.ndarray], List[list]],
-        func_name: Callable,
     ) -> pd.Series:
         """
         Compute a distance metric over a rolling cumulative window.
@@ -117,20 +116,17 @@ class ContinuousDriftTracker(BaseModel):
             - Index: The datetime indices corresponding to each period (excluding the first).
             - Values: The calculated distance metric for each period.
         """
-        func = self._selection_function(func_name)
-
-        n = X.shape[0]
-        values = np.zeros(n)
-        past_values = np.array([], dtype=float)
-        index = X.index[1:]
+        n = len(X)
+        distances = np.zeros(n)
+        index = self._get_index(X)
         X = np.asarray(X)
 
+        past_values = np.array([], dtype=float)
         for i in range(1, n):
             past_values = np.concatenate([past_values, X[i - 1]])
-            value = func(past_values, X[i])
-            values[i] = value
-
-        return pd.Series(values[1:], index=index)
+            value = self.func(past_values, X[i])
+            distances[i] = value
+        return pd.Series(distances[1:], index=index[1:])
 
     def score(
         self,
@@ -140,8 +136,7 @@ class ContinuousDriftTracker(BaseModel):
         Compute the drift metric for each time period in the provided dataset.
         """
         reference = np.concatenate(np.asarray(self.reference_distribution))
-        func = self._selection_function(self.func)
         index = self._get_index(X)
         X = np.asarray(X)
 
-        return pd.Series([func(reference, row) for row in X], index=index)
+        return pd.Series([self.func(reference, row) for row in X], index=index)
