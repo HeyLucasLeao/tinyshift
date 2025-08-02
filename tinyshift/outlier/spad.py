@@ -61,12 +61,24 @@ class SPAD(BaseHistogramModel):
         X : np.ndarray
             The input data to fit. Must be a numpy array.
         nbins : Union[int, str], optional
-            The number of bins to use for discretizing continuous features. Default is 5.
+            The number of bins or binning strategy for discretization. \n
+            Options: \n
+                Integer:
+                    - Exact number of bins to use for all continuous features
+
+                String options:
+                    - 'auto': Minimum of 'sturges' and 'fd' estimators
+                    - 'fd' (Freedman Diaconis): Robust to outliers
+                    - 'doane': Improved Sturges for non-normal data
+                    - 'scott': Less robust but computationally efficient
+                    - 'stone': Information-theoretic approach
+                    - 'rice': Simple size-based estimator
+                    - 'sturges': Optimal for Gaussian data
+                    - 'sqrt': Square root of data size
         random_state : int, optional
             The random seed for reproducibility. Default is 42.
         method : str, optional
             The method to compute the interval for continuous features. Default is "stddev", based on the original paper.
-
         Returns
         -------
         SPAD
@@ -188,5 +200,5 @@ class SPAD(BaseHistogramModel):
 
         X = check_array(X)
         scores = self.decision_function(X)
-        threshold = np.quantile(self.decision_scores_, quantile, method="higher")
+        threshold = np.quantile(self.decision_scores_, quantile, method="lower")
         return scores < threshold

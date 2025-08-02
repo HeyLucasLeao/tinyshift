@@ -1,5 +1,8 @@
 from typing import Callable, Tuple, Union
 import numpy as np
+from scipy.stats import kurtosis, skew
+import numpy as np
+from typing import Union, Tuple
 
 
 class StatisticalInterval:
@@ -55,12 +58,26 @@ class StatisticalInterval:
     ) -> Tuple[float, float]:
         """Calculates interval using quantiles."""
         lower_bound = (
-            np.quantile(X, lower, method="higher") if lower is not None else None
+            np.quantile(X, lower, method="lower") if lower is not None else None
         )
         upper_bound = (
             np.quantile(X, upper, method="higher") if upper is not None else None
         )
         return (lower_bound, upper_bound)
+
+    @staticmethod
+    def auto_select_method(X: np.ndarray) -> Union[str, Tuple[str, float, float]]:
+        """Automatically selects a appropriate statistical interval method based only on data distribution."""
+
+        is_normal = abs(skew(X)) <= 0.5 and abs(kurtosis(X)) <= 1
+
+        if is_normal:
+            l, u = StatisticalInterval.iqr_interval(X)
+            return "mad" if np.mean((X < l) | (X > u)) > 0.05 else "stddev"
+        else:
+            if abs(skew(X)) > 0.5:
+                return ("quantile", 0.01, 0.99) if abs(kurtosis(X)) > 1 else "mad"
+            return "iqr"
 
     @staticmethod
     def compute_interval(
@@ -73,6 +90,7 @@ class StatisticalInterval:
         Args:
             data: Input data for threshold calculation.
             method: Method to compute interval. Can be:
+                - "auto" (automatically selects a method)
                 - "stddev" (mean ± 3σ)
                 - "mad" (median ± 3*MAD)
                 - "iqr" (median ± 1.5*IQR)
@@ -83,6 +101,10 @@ class StatisticalInterval:
             Tuple[float, float]: Lower and upper bounds.
         """
         X = np.asarray(X)
+
+        if method == "auto":
+            method = StatisticalInterval.auto_select_method(X)
+
         if isinstance(method, str):
             if method == "stddev":
                 lower_bound, upper_bound = StatisticalInterval.stddev_interval(X)
