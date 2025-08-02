@@ -39,16 +39,29 @@ class HBOS(BaseHistogramModel):
         X : np.ndarray
             Training data, where `n_samples` is the number of samples and
             `n_features` is the number of features.
-        nbins : Union[int, str], optional (default=10)
-            Number of bins to use for the histogram. If 'auto', the number of bins
-            is determined automatically.
+        nbins : Union[int, str], optional
+            The number of bins or binning strategy for discretization. \n
+            Options: \n
+                Integer:\n
+                    - Exact number of bins to use for all continuous features
+
+                String options:\n
+                    - 'auto': Minimum of 'sturges' and 'fd' estimators
+                    - 'fd' (Freedman Diaconis): Robust to outliers
+                    - 'doane': Improved Sturges for non-normal data
+                    - 'scott': Less robust but computationally efficient
+                    - 'stone': Information-theoretic approach
+                    - 'rice': Simple size-based estimator
+                    - 'sturges': Optimal for Gaussian data
+                    - 'sqrt': Square root of data size
         dynamic_bins : bool, optional (default=False)
             If True, the number of bins is determined dynamically for each feature.
         Returns
         -------
         self : HBOS
             Fitted estimator.
-         Notes
+
+        Notes
         -----
         - If `X` is a pandas Series or DataFrame, the data types and column names are stored.
         - For categorical features, relative frequencies are computed.
