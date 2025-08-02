@@ -55,7 +55,7 @@ class StatisticalInterval:
     ) -> Tuple[float, float]:
         """Calculates interval using quantiles."""
         lower_bound = (
-            np.quantile(X, lower, method="higher") if lower is not None else None
+            np.quantile(X, lower, method="lower") if lower is not None else None
         )
         upper_bound = (
             np.quantile(X, upper, method="higher") if upper is not None else None

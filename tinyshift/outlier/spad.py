@@ -188,5 +188,5 @@ class SPAD(BaseHistogramModel):
 
         X = check_array(X)
         scores = self.decision_function(X)
-        threshold = np.quantile(self.decision_scores_, quantile, method="higher")
+        threshold = np.quantile(self.decision_scores_, quantile, method="lower")
         return scores < threshold
