@@ -18,8 +18,10 @@ class BootstrapBCA:
         n = len(data)
         jackknife = np.array([statistic(np.delete(data, i)) for i in range(n)])
         jackknife_mean = jackknife.mean()
-        diffs = jackknife - jackknife_mean
-        acceleration = np.sum(diffs**3) / (6.0 * (np.sum(diffs**2) ** 1.5))
+        jackknife_deviation = jackknife - jackknife_mean
+        skew = jackknife_deviation**3
+        variance = jackknife_deviation**2
+        acceleration = np.sum(skew) / (6.0 * (np.sum(variance) ** (3 / 2)))
         return acceleration
 
     def _bootstrap_statistics(
@@ -71,10 +73,14 @@ class BootstrapBCA:
 
         # Adjusting percentiles
         alpha = 1 - confidence_level
-        z_alpha = norm.ppf(1 - alpha / 2)
+        z_alpha_lower = norm.ppf(alpha / 2)
+        z_alpha_upper = norm.ppf(1 - alpha / 2)
 
-        z_lower_bound = (z0 - z_alpha) / (1 - acceleration * (z0 - z_alpha)) + z0
-        z_upper_bound = (z0 + z_alpha) / (1 - acceleration * (z0 + z_alpha)) + z0
+        denominator_lower = 1 - acceleration * (z0 + z_alpha_lower)
+        denominator_upper = 1 - acceleration * (z0 + z_alpha_upper)
+
+        z_lower_bound = z0 + (z0 + z_alpha_lower) / denominator_lower
+        z_upper_bound = z0 + (z0 + z_alpha_upper) / denominator_upper
 
         alpha_lower = norm.cdf(z_lower_bound)
         alpha_upper = norm.cdf(z_upper_bound)
