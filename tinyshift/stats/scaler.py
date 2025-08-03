@@ -26,8 +26,6 @@ class RobustGaussianScaler(BaseEstimator, TransformerMixin):
         The power transformation method:
         - 'yeo-johnson': works for both positive and negative values
         - 'box-cox': only works for strictly positive data
-    standardize : bool, default=True
-        Whether to apply standard scaling (zero mean and unit variance) after power transformation.
 
     Attributes
     ----------
@@ -96,18 +94,7 @@ class RobustGaussianScaler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        """Apply the learned transformation to new data.
-
-        Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            The data to transform.
-
-        Returns
-        -------
-        X_transformed : ndarray of shape (n_samples, n_features)
-            The transformed data.
-        """
+        """Apply the learned transformation to new data."""
         check_is_fitted(self)
         X = check_array(X, ensure_2d=False, dtype=np.float64, copy=True)
         X = X.reshape(-1, 1) if len(X.shape) == 1 else X
