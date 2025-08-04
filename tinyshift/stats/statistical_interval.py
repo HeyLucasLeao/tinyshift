@@ -58,10 +58,10 @@ class StatisticalInterval:
     ) -> Tuple[float, float]:
         """Calculates interval using quantiles."""
         lower_bound = (
-            np.quantile(X, lower, method="lower") if lower is not None else None
+            np.quantile(X, lower, method="lower") if lower is not None else np.nan
         )
         upper_bound = (
-            np.quantile(X, upper, method="higher") if upper is not None else None
+            np.quantile(X, upper, method="higher") if upper is not None else np.nan
         )
         return (lower_bound, upper_bound)
 
@@ -102,6 +102,9 @@ class StatisticalInterval:
         """
         X = np.asarray(X)
 
+        def _none_to_nan(value):
+            return np.nan if value is None else value
+
         if method == "auto":
             method = StatisticalInterval.auto_select_method(X)
 
@@ -118,6 +121,8 @@ class StatisticalInterval:
             lower_bound, upper_bound = StatisticalInterval.custom_interval(X, method)
         elif isinstance(method, tuple) and len(method) == 2:
             lower_bound, upper_bound = method
+            lower_bound = _none_to_nan(lower_bound)
+            upper_bound = _none_to_nan(upper_bound)
         elif isinstance(method, tuple) and len(method) == 3 and method[0] == "quantile":
             lower, upper = method[1], method[2]
             lower_bound, upper_bound = StatisticalInterval.quantile_interval(

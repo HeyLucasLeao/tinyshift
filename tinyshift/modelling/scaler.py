@@ -3,6 +3,7 @@ from sklearn.preprocessing import PowerTransformer, StandardScaler
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.validation import check_array
+from tinyshift.stats import StatisticalInterval
 
 
 class RobustGaussianScaler(BaseEstimator, TransformerMixin):
@@ -16,16 +17,6 @@ class RobustGaussianScaler(BaseEstimator, TransformerMixin):
 
     The combination of these steps makes the scaler robust to outliers while effectively
     normalizing the feature distributions.
-
-    Parameters
-    ----------
-    winsorize_quantile : float, default=0.01
-        Proportion of values to winsorize from each tail of the distribution.
-        Must be between 0 and 0.5. For example, 0.01 clips the top and bottom 1% of values.
-    power_method : {'yeo-johnson', 'box-cox'}, default='yeo-johnson'
-        The power transformation method:
-        - 'yeo-johnson': works for both positive and negative values
-        - 'box-cox': only works for strictly positive data
 
     Attributes
     ----------
@@ -41,33 +32,40 @@ class RobustGaussianScaler(BaseEstimator, TransformerMixin):
         Number of features seen during fit.
     feature_names_in_ : ndarray of shape (n_features_in_,)
         Names of features seen during fit. Only present when input is a pandas DataFrame.
+    winsorization_bounds_ : list of tuples
+        Property that returns the winsorization bounds for each feature as (lower, upper) tuples.
 
     """
 
     def __init__(
-        self, winsorize_quantile: float = 0.01, power_method: str = "yeo-johnson"
+        self,
     ):
-        if not 0 <= winsorize_quantile <= 0.5:
-            raise ValueError("winsorize_quantile must be between 0 and 0.5")
-        self.winsorize_quantile = winsorize_quantile
-        self.power_method = power_method
-        self.power_transformer_ = PowerTransformer(
-            method=power_method, standardize=False
-        )
+        self.power_transformer_ = None
         self.scaler_ = StandardScaler()
         self.lower_bounds_ = None
         self.upper_bounds_ = None
         self.n_features_in_ = None
         self.feature_names_in_ = None
 
-    def fit(self, X: np.ndarray) -> "RobustNormalScaler":
+    def fit(
+        self,
+        X: np.ndarray,
+        winsorize_method: str = "stddev",
+        power_method: str = "yeo-johnson",
+    ) -> "RobustNormalScaler":
         """Compute the winsorization bounds, power transform and scaling parameters.
 
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
             The data used to compute the transformation parameters.
-
+        winsorize_method : str, default="stddev"
+            The method used to compute winsorization bounds. Passed to StatisticalInterval.compute_interval().
+            Common options include "stddev", "mad", "iqr", etc.
+        power_method : {'yeo-johnson', 'box-cox'}, default='yeo-johnson'
+            The power transformation method:
+            - 'yeo-johnson': works for both positive and negative values
+            - 'box-cox': only works for strictly positive data
         Returns
         -------
         self : object
@@ -75,18 +73,26 @@ class RobustGaussianScaler(BaseEstimator, TransformerMixin):
         """
         self.feature_names_in_ = getattr(X, "columns", None)
         X = check_array(X, ensure_2d=False, dtype=np.float64, copy=True)
-        X = X.reshape(-1, 1) if len(X.shape) == 1 else X
-
+        X = X.reshape(-1, 1) if X.ndim == 1 else X
         self.n_features_in_ = X.shape[1]
-        self.lower_bounds_ = np.quantile(
-            X, self.winsorize_quantile, axis=0, method="lower"
-        )
-        self.upper_bounds_ = np.quantile(
-            X, 1 - self.winsorize_quantile, axis=0, method="higher"
+
+        if power_method not in ["yeo-johnson", "box-cox"]:
+            raise ValueError("power_method must be either 'yeo-johnson' or 'box-cox'")
+
+        winsorize_bounds = np.array(
+            [
+                StatisticalInterval.compute_interval(X[:, i], method=winsorize_method)
+                for i in range(self.n_features_in_)
+            ]
         )
 
+        self.power_transformer_ = PowerTransformer(
+            method=power_method, standardize=False
+        )
+
+        self.lower_bounds_ = np.nan_to_num(winsorize_bounds[:, 0], nan=-np.inf)
+        self.upper_bounds_ = np.nan_to_num(winsorize_bounds[:, 1], nan=np.inf)
         X = np.clip(X, self.lower_bounds_, self.upper_bounds_)
-
         self.power_transformer_.fit(X)
         X = self.power_transformer_.transform(X)
         self.scaler_.fit(X)
@@ -110,13 +116,18 @@ class RobustGaussianScaler(BaseEstimator, TransformerMixin):
 
         return X
 
-    def fit_transform(self, X: np.ndarray) -> np.ndarray:
+    def fit_transform(
+        self,
+        X: np.ndarray,
+        winsorize_method: str = "stddev",
+        power_method: str = "yeo-johnson",
+    ) -> np.ndarray:
         """Convenience method for fit().transform()."""
 
-        return self.fit(X).transform(X)
+        return self.fit(X, winsorize_method, power_method).transform(X)
 
     @property
     def winsorization_bounds_(self) -> list[tuple[float, float]]:
-        """Get the winsorization bounds for each feature as (lower, upper) tuples."""
+        """Get the winsorization bounds for each feature as list of (lower, upper) tuples."""
         check_is_fitted(self, ["lower_bounds_", "upper_bounds_"])
         return list(zip(self.lower_bounds_, self.upper_bounds_))
