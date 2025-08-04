@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "tinyshift"
-version = "0.3.0"
+version = "0.3.1"
 description = "A small toolbox for mlops"
 license = "MIT"
 authors = ["Lucas Leão <heylucasleao@gmail.com>"]
