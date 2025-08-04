@@ -83,11 +83,9 @@ class StatisticalInterval:
                 return "iqr"
             else:
                 return "mad"
-        else:
-            if coeff_var > 1.5:
-                return ("quantile", 0.01, 0.99)
-            elif skewness > 0.5:
-                return "mad"
+
+        if coeff_var > 1.5 or skewness > 0.5:
+            return "mad"
 
         return "iqr"
 
