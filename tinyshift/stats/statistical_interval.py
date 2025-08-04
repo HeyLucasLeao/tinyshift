@@ -67,17 +67,29 @@ class StatisticalInterval:
 
     @staticmethod
     def auto_select_method(X: np.ndarray) -> Union[str, Tuple[str, float, float]]:
-        """Automatically selects a appropriate statistical interval method based only on data distribution."""
+        """Automatically selects the statistical interval method for outlier detection
+        based on data distribution and dispersion (using Coefficient of Variation, CV).
+        """
 
-        is_normal = abs(skew(X)) <= 0.5 and abs(kurtosis(X)) <= 1
+        skewness = abs(skew(X))
+        kurt = abs(kurtosis(X))
+        is_normal = (skewness <= 0.5) and (kurt <= 1)
+        coeff_var = np.std(X) / abs(np.mean(X)) if np.mean(X) != 0 else np.inf
 
         if is_normal:
-            l, u = StatisticalInterval.iqr_interval(X)
-            return "mad" if np.mean((X < l) | (X > u)) > 0.05 else "stddev"
+            if coeff_var < 0.15:
+                return "stddev"
+            elif coeff_var < 0.30:
+                return "iqr"
+            else:
+                return "mad"
         else:
-            if abs(skew(X)) > 0.5:
-                return ("quantile", 0.01, 0.99) if abs(kurtosis(X)) > 1 else "mad"
-            return "iqr"
+            if coeff_var > 1.5:
+                return ("quantile", 0.01, 0.99)
+            elif skewness > 0.5:
+                return "mad"
+
+        return "iqr"
 
     @staticmethod
     def compute_interval(
@@ -119,6 +131,8 @@ class StatisticalInterval:
                 raise ValueError(f"Unsupported method: {method}")
         elif callable(method):
             lower_bound, upper_bound = StatisticalInterval.custom_interval(X, method)
+            lower_bound = _none_to_nan(lower_bound)
+            upper_bound = _none_to_nan(upper_bound)
         elif isinstance(method, tuple) and len(method) == 2:
             lower_bound, upper_bound = method
             lower_bound = _none_to_nan(lower_bound)
