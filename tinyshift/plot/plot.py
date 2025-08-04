@@ -41,7 +41,7 @@ class Plot:
         lower_limit, upper_limit = self.statistics.get(
             "lower_limit"
         ), self.statistics.get("upper_limit")
-        if lower_limit:
+        if not np.isnan(lower_limit):
             fig.add_hline(
                 y=lower_limit,
                 line_dash="dash",
@@ -49,7 +49,7 @@ class Plot:
                 name="Lower Limit",
                 opacity=0.5,
             )
-        if upper_limit:
+        if not np.isnan(upper_limit):
             fig.add_hline(
                 y=upper_limit,
                 line_dash="dash",
@@ -177,8 +177,8 @@ class Plot:
         )
 
         def marker_color(y):
-            if (upper_limit is not None and y > upper_limit) or (
-                lower_limit is not None and y < lower_limit
+            if (not np.isnan(upper_limit) and y > upper_limit) or (
+                not np.isnan(lower_limit) and y < lower_limit
             ):
                 return "firebrick"
             return "#1f77b4"
