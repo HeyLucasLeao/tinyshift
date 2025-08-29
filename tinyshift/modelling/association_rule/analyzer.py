@@ -17,8 +17,15 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
     the strength and direction of relationships between items.
 
     The analyzer is designed to work with transactional data where each transaction
-    is a list of items. It supports multiple association metrics including Zhang's metric,
-    conviction, confidence and certainty factor.
+    is a list of items.
+
+    The analyzer supports multiple association metrics including:
+    - Zhang's metric
+    - Conviction
+    - Confidence
+    - Leverage
+    - Cosine similarity
+    - Yule's Q coefficient
 
     Attributes:
         encoder_ (TransactionEncoder): Encoder for transaction data
