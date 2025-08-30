@@ -6,44 +6,62 @@ It processes transactional data (lists of items purchased together), encodes it 
 
 ## Features
 
-- One-hot encoding for transactions using `TransactionEncoder`
-- Computes multiple association metrics:
+- One-hot encoding for transactions via `TransactionEncoder`
+- Multiple association metrics:
+  - Lift
   - Confidence
   - Conviction
-  - Zhang’s metric
-  - Leverage
-  - Cosine similarity
-  - Yule’s Q
-- Correlation matrix generation for any selected metric
-- Model persistence (save/load via pickle)
+  - Zhang’s Metric
+  - Yule’s Q Coefficient
+  - Hypergeometric *p*-value
+- Correlation matrix generation with any supported metric
+- Model persistence (save/load with pickle)
 
 ## Usage
 
 1. Fit the analyzer on a dataset of transactions:
 
 ```python
+from transaction_analyzer import TransactionAnalyzer
+
+transactions = [
+    ["milk", "bread", "butter"],
+    ["beer", "diapers", "bread"],
+    ["milk", "beer", "diapers"],
+    ["bread", "butter"]
+]
+
 analyzer = TransactionAnalyzer().fit(transactions)
+
 ```
 
 2. Calculate associations between items:
 
 ```python
-analyzer.confidence("milk", "bread")
-analyzer.zhang_metric("diapers", "beer")
+print(analyzer.confidence("milk", "bread"))
+print(analyzer.zhang_metric("diapers", "beer"))
 ```
 
 3. Or create a correlation matrix:
 ```python
-analyzer.correlation_matrix(["milk", "bread"], ["butter", "jam"], metric="cosine")
+matrix = analyzer.correlation_matrix(
+    ["milk", "bread"],
+    ["butter", "jam"],
+    metric="hypergeom"
+)
+print(matrix)
+
 ```
 
-## Association Metrics Explained
+## Association Metrics
+
 Each metric measures different aspects of the relationship between items in transactions.
-| Metric             | Range         | Interpretation                                         | Recommended Use Case                                                   |
-| ------------------ | ------------- | ------------------------------------------------------ | ---------------------------------------------------------------------- |
-| **Confidence**     | 0 to 1        | Probability of consequent given antecedent             | Rule filtering: "If A occurs, how likely is B?"                        |
-| **Conviction**     | 1 to ∞        | Rule reliability vs independence                       | When measuring rule strength beyond coincidence                        |
-| **Zhang’s Metric** | -1 to 1       | Deviation from statistical independence                | Balanced measure, less sensitive to item support                       |
-| **Leverage**       | -0.25 to 0.25 | Difference between observed and expected co-occurrence | For detecting statistically significant co-occurrences                 |
-| **Cosine**         | 0 to 1        | Vector similarity between items                        | Good for symmetric similarity analysis (e.g., clustering)              |
-| **Yule’s Q**       | -1 to 1       | Based on odds ratio                                    | Effective for identifying strong positive/negative binary associations |
+
+| Metric              | Range         | Interpretation                                         | Question You Want to Answer                                |
+| ------------------- | ------------- | ----------------------------------------------------- | ---------------------------------------------------------- |
+| **Lift**            | 0 → ∞         | Correlation between antecedent and consequent          | “How much more often do A and B occur together than expected?” |
+| **Confidence**      | 0 → 1         | Probability of consequent given antecedent             | “If A occurs, how likely is B?”                            |
+| **Conviction**      | 1 → ∞         | Reliability of a rule beyond independence              | “How strongly does A imply B compared to chance?”          |
+| **Zhang’s Metric**  | -1 → 1        | Deviation from statistical independence                | “How far is the A→B relation from being independent?”      |
+| **Yule’s Q**        | -1 → 1        | Odds ratio-based association                           | “Do A and B strongly reinforce or oppose each other?”      |
+| **Hypergeom p-value**       | 0 → 1         | Hypergeometric *p*-value for co-occurrence             | “Is the co-occurrence of A and B statistically significant?” |
