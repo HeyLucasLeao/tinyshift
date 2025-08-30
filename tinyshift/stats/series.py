@@ -1,3 +1,8 @@
+# Copyright (c) 2024-2025 Lucas Leão
+# tinyshift - A small toolbox for mlops
+# Licensed under the MIT License
+
+
 from typing import Union, Tuple, List
 import numpy as np
 import scipy
