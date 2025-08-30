@@ -1,3 +1,8 @@
+# Copyright (c) 2024-2025 Lucas Leão
+# tinyshift - A small toolbox for mlops
+# Licensed under the MIT License
+
+
 from typing import List, Any, Optional
 import pandas as pd
 import numpy as np
@@ -5,6 +10,7 @@ import pickle
 from itertools import product
 from sklearn.base import BaseEstimator, TransformerMixin
 from .encoder import TransactionEncoder
+from scipy.stats import hypergeom
 
 
 class TransactionAnalyzer(BaseEstimator, TransformerMixin):
@@ -20,12 +26,12 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
     is a list of items.
 
     The analyzer supports multiple association metrics including:
+    - Lift
     - Zhang's metric
     - Conviction
     - Confidence
-    - Leverage
-    - Cosine similarity
     - Yule's Q coefficient
+    - Hypergeometric p-value
 
     Attributes:
         encoder_ (TransactionEncoder): Encoder for transaction data
@@ -101,6 +107,54 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
         """
         return items.sum()
 
+    def _get_series(self, antecedent: str, consequent: str):
+        if self.transactions_ is None:
+            raise ValueError("Analyzer must be fitted before calculating the metric")
+
+        try:
+            antecedent_series = self.transactions_[antecedent]
+            consequent_series = self.transactions_[consequent]
+        except KeyError as e:
+            raise KeyError(f"Item not found in encoded transactions: {e}")
+
+        return antecedent_series, consequent_series
+
+    def lift(self, antecedent: str, consequent: str) -> float:
+        """
+        Calculate lift metric for association rules.
+
+        Lift measures how much more often antecedent and consequent occur together
+        than expected if they were statistically independent.
+
+        - lift = 1: items are independent
+        - lift > 1: positive correlation (higher is better)
+        - lift < 1: negative correlation
+
+        Parameters
+        ----------
+        antecedent : str
+            The antecedent item
+        consequent : str
+            The consequent item
+
+        Returns
+        -------
+        float
+            Lift value (≥ 0)
+        """
+        antecedent_series, consequent_series = self._get_series(antecedent, consequent)
+
+        supportA = self._get_support(antecedent_series)
+        supportC = self._get_support(consequent_series)
+        supportAC = self._get_support(
+            np.logical_and(antecedent_series, consequent_series)
+        )
+
+        if supportA == 0 or supportC == 0:
+            return 0.0
+
+        return supportAC / (supportA * supportC)
+
     def confidence(self, antecedent: str, consequent: str) -> float:
         """
         Calculate confidence metric for association rules.
@@ -122,14 +176,7 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
             ValueError: If analyzer has not been fitted
             KeyError: If either antecedent or consequent item is not found in encoded transactions
         """
-        if self.transactions_ is None:
-            raise ValueError("Analyzer must be fitted before calculating confidence")
-
-        try:
-            antecedent_series = self.transactions_[antecedent]
-            consequent_series = self.transactions_[consequent]
-        except KeyError as e:
-            raise KeyError(f"Item not found in encoded transactions: {e}")
+        antecedent_series, consequent_series = self._get_series(antecedent, consequent)
 
         supportA = self._get_support(antecedent_series)
         supportAC = self._get_support(
@@ -165,14 +212,7 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
             ValueError: If analyzer has not been fitted
             KeyError: If either antecedent or consequent item is not found in encoded transactions
         """
-        if self.transactions_ is None:
-            raise ValueError("Analyzer must be fitted before calculating conviction")
-
-        try:
-            antecedent_series = self.transactions_[antecedent]
-            consequent_series = self.transactions_[consequent]
-        except KeyError as e:
-            raise KeyError(f"Item not found in encoded transactions: {e}")
+        antecedent_series, consequent_series = self._get_series(antecedent, consequent)
 
         supportA = self._get_support(antecedent_series)
         supportC = self._get_support(consequent_series)
@@ -214,16 +254,7 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
             ValueError: If analyzer has not been fitted
             KeyError: If either antecedent or consequent item is not found in encoded transactions
         """
-        if self.transactions_ is None:
-            raise ValueError(
-                "Analyzer must be fitted before calculating Zhang's metric"
-            )
-
-        try:
-            antecedent_series = self.transactions_[antecedent]
-            consequent_series = self.transactions_[consequent]
-        except KeyError as e:
-            raise KeyError(f"Item not found in encoded transactions: {e}")
+        antecedent_series, consequent_series = self._get_series(antecedent, consequent)
 
         supportA = self._get_support(antecedent_series)
         supportC = self._get_support(consequent_series)
@@ -236,82 +267,36 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
 
         return numerator / denominator if denominator != 0 else 0.0
 
-    def leverage(self, antecedent: str, consequent: str) -> float:
+    def hypergeom(self, antecedent: str, consequent: str):
         """
-        Calculate leverage metric for association rules.
+        Calculate the hypergeometric p-value for the association rule.
 
-        Leverage measures the difference between the observed frequency of co-occurrence and the frequency expected
-        if the items were independent. Values range from -0.25 and 0.25, where positive values indicate positive association.
+        The p-value represents the probability of observing at least as many
+        co-occurrences of antecedent and consequent as were actually observed,
+        assuming they are independent.
+
+        A lower p-value indicates stronger evidence against the null hypothesis
+        of independence.
 
         Parameters
         ----------
-            antecedent : The antecedent item in the association rule
-            consequent : The consequent item in the association rule
+        antecedent : str
+            The antecedent item
+        consequent : str
+            The consequent item
 
         Returns
-        ----------
-            float : Leverage value between -0.25 and 0.25
-
-        Raises:
-            ValueError: If analyzer has not been fitted
-            KeyError: If either antecedent or consequent item is not found in encoded transactions
+        -------
+        float
+            Hypergeometric p-value between 0 and 1
         """
-        if self.transactions_ is None:
-            raise ValueError("Analyzer must be fitted before calculating leverage")
+        antecedent_series, consequent_series = self._get_series(antecedent, consequent)
 
-        try:
-            antecedent_series = self.transactions_[antecedent]
-            consequent_series = self.transactions_[consequent]
-        except KeyError as e:
-            raise KeyError(f"Item not found in encoded transactions: {e}")
+        nX = self._get_counts(antecedent_series)
+        nY = self._get_counts(consequent_series)
+        nXY = self._get_counts(np.logical_and(antecedent_series, consequent_series))
 
-        supportA = self._get_support(antecedent_series)
-        supportC = self._get_support(consequent_series)
-        supportAC = self._get_support(
-            np.logical_and(antecedent_series, consequent_series)
-        )
-
-        return supportAC - (supportA * supportC)
-
-    def cosine(self, antecedent: str, consequent: str) -> float:
-        """
-        Calculate cosine similarity for association rules.
-
-        Cosine similarity measures the cosine of the angle between the two item vectors.
-        It is equivalent to the support of the co-occurrence divided by the
-        geometric mean of the individual supports.
-
-        Values range from 0 to 1, where higher values indicate stronger association.
-
-        Parameters
-        ----------
-            antecedent : The antecedent item in the association rule
-            consequent : The consequent item in the association rule
-
-        Returns
-        ----------
-            float : Cosine similarity value between 0 and 1
-
-        Raises:
-            ValueError: If analyzer has not been fitted
-            KeyError: If either antecedent or consequent item is not found in encoded transactions
-        """
-        if self.transactions_ is None:
-            raise ValueError("Analyzer must be fitted before calculating cosine")
-
-        try:
-            antecedent_series = self.transactions_[antecedent]
-            consequent_series = self.transactions_[consequent]
-        except KeyError as e:
-            raise KeyError(f"Item not found in encoded transactions: {e}")
-
-        supportA = self._get_support(antecedent_series)
-        supportC = self._get_support(consequent_series)
-        supportAC = self._get_support(
-            np.logical_and(antecedent_series, consequent_series)
-        )
-
-        return supportAC / np.sqrt(supportA * supportC)
+        return hypergeom.sf(nXY - 1, len(self.transactions_), nY, nX)
 
     def yules_q(self, antecedent: str, consequent: str) -> float:
         """
@@ -335,14 +320,7 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
             KeyError: If either antecedent or consequent item is not found
         """
 
-        if self.transactions_ is None:
-            raise ValueError("Analyzer must be fitted before calculating cosine")
-
-        try:
-            antecedent_series = self.transactions_[antecedent]
-            consequent_series = self.transactions_[consequent]
-        except KeyError as e:
-            raise KeyError(f"Item not found in encoded transactions: {e}")
+        antecedent_series, consequent_series = self._get_series(antecedent, consequent)
 
         nX = self._get_counts(antecedent_series)
         nY = self._get_counts(consequent_series)
@@ -358,10 +336,10 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
         self,
         row_items: List[str],
         column_items: List[str],
-        metric: str = "zhang",
+        metric: str = "lift",
     ) -> pd.DataFrame:
         """
-        Create a correlation matrix between row and column items using Zhang's metric.
+        Create a correlation matrix between row and column items using the desirable metric.
 
         Parameters
         -----------
@@ -374,7 +352,7 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
         --------
         pd.DataFrame
             Correlation matrix with row_items as index, column_items as columns,
-            and Zhang's metric values as cells
+            and metric values as cells
 
         Raises
         -------
@@ -387,12 +365,12 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
             )
 
         metric_mapping = {
+            "lift": self.lift,
             "zhang": self.zhang_metric,
             "conviction": self.conviction,
             "confidence": self.confidence,
-            "leverage": self.leverage,
-            "cosine": self.cosine,
             "yules_q": self.yules_q,
+            "hypergeom": self.hypergeom,
         }
 
         callable_function = metric_mapping.get(metric, None)

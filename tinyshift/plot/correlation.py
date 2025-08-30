@@ -1,3 +1,8 @@
+# Copyright (c) 2024-2025 Lucas Leão
+# tinyshift - A small toolbox for mlops
+# Licensed under the MIT License
+
+
 import plotly.graph_objects as go
 import plotly.express as px
 from typing import Optional
