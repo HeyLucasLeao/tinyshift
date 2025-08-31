@@ -30,6 +30,7 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
     - Zhang's metric
     - Conviction
     - Confidence
+    - Bayesian Confidence
     - Yule's Q coefficient
     - Hypergeometric p-value
 
@@ -107,7 +108,38 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
         """
         return items.sum()
 
-    def _get_series(self, antecedent: str, consequent: str):
+    def _get_series(
+        self, antecedent: str, consequent: str
+    ) -> tuple[pd.Series, pd.Series]:
+        """
+        Retrieve the encoded series for antecedent and consequent items.
+
+        This internal method validates and returns the one-hot encoded series
+        for both antecedent and consequent items from the fitted transactions.
+        It serves as a helper method for all association metric calculations.
+
+        Parameters
+        ----------
+        antecedent : str
+            The antecedent item name as it appears in the encoded columns
+        consequent : str
+            The consequent item name as it appears in the encoded columns
+
+        Returns
+        -------
+        tuple[pd.Series, pd.Series]
+            A tuple containing two pandas Series:
+            - antecedent_series: Boolean series indicating presence of antecedent
+            - consequent_series: Boolean series indicating presence of consequent
+
+        Raises
+        ------
+        ValueError
+            If the analyzer has not been fitted (transactions_ is None)
+        KeyError
+            If either antecedent or consequent item is not found in the
+            encoded transaction columns
+        """
         if self.transactions_ is None:
             raise ValueError("Analyzer must be fitted before calculating the metric")
 
@@ -187,6 +219,50 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
             return 0.0
 
         return supportAC / supportA
+
+    def bayesian_confidence(self, antecedent: str, consequent: str) -> float:
+        """
+        Calculate Bayesian confidence with beta prior for association rules.
+
+        This method computes a Bayesian estimate of confidence using a Beta(1,1) prior
+        (equivalent to a uniform prior), which provides a smoothed estimate that is
+        particularly useful when dealing with small sample sizes or sparse data.
+
+        The Bayesian confidence is calculated as:
+            (nXY + α) / (nX + α + β)
+        where α = 1 and β = 1 for a uniform prior, giving:
+            (nXY + 1) / (nX + 2)
+
+        This approach prevents extreme confidence values (0 or 1) when dealing with
+        limited data and provides more robust estimates, especially for rare items.
+
+        Parameters
+        ----------
+        antecedent : str
+            The antecedent item in the association rule
+        consequent : str
+            The consequent item in the association rule
+
+        Returns
+        -------
+        float
+            Bayesian confidence estimate between 0 and 1
+
+        Raises
+        ------
+        ValueError
+            If analyzer has not been fitted
+        KeyError
+            If either antecedent or consequent item is not found in encoded transactions
+        """
+        antecedent_series, consequent_series = self._get_series(antecedent, consequent)
+        nX = self._get_counts(antecedent_series)
+        nXY = self._get_counts(np.logical_and(antecedent_series, consequent_series))
+
+        alpha = nXY + 1
+        beta = nX - nXY + 1
+
+        return alpha / (alpha + beta)
 
     def conviction(self, antecedent: str, consequent: str) -> float:
         """
@@ -369,6 +445,7 @@ class TransactionAnalyzer(BaseEstimator, TransformerMixin):
             "zhang": self.zhang_metric,
             "conviction": self.conviction,
             "confidence": self.confidence,
+            "bayesian_confidence": self.bayesian_confidence,
             "yules_q": self.yules_q,
             "hypergeom": self.hypergeom,
         }
