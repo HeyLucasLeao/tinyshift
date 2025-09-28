@@ -146,6 +146,12 @@ tinyshift
 │   │   ├── __init__.py
 │   │   ├── correlation.py
 │   │   └── plot.py
+│   ├── series
+│   │   ├── README.md
+│   │   ├── __init__.py
+│   │   ├── forecastability.py
+│   │   ├── outlier.py
+│   │   └── stats.py
 │   ├── stats
 │   │   ├── __init__.py
 │   │   ├── bootstrap_bca.py
