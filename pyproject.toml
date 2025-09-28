@@ -1,6 +1,6 @@
 [project]
 name = "tinyshift"
-version = "0.5.1"
+version = "0.5.2"
 description = "A small toolbox for mlops"
 license = "MIT"
 authors = [{name = "Lucas Leão", email = "heylucasleao@gmail.com"}]
@@ -8,7 +8,6 @@ readme = "README.md"
 keywords = ["mlops", "toolbox", "machine-learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent"
 ]
 requires-python = ">=3.10"
