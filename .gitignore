@@ -5,3 +5,5 @@
 *.egg-info
 *.egg
 *.log
+uv.lock
+__pycache__/
