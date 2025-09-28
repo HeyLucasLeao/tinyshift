@@ -27,10 +27,10 @@ cd tinyshift
 pip install .
 ```
 
-> **Note:** If you want to enable plotting capabilities, you need to install the extras using Poetry:
+> **Note:** If you want to enable plotting capabilities, you need to install the extras using UV:
 
 ```bash
-poetry install --all-extras
+uv install --all-extras
 ```
 
 ## Usage
@@ -45,7 +45,7 @@ df = pd.DataFrame("examples.csv")
 df_reference = df[(df["datetime"] < '2024-07-01')].copy()
 df_analysis = df[(df["datetime"] >= '2024-07-01')].copy()
 
-detector = CategoricalDriftDetector(df_reference, 'discrete_1', "datetime", "W", drift_limit='mad')
+detector = CategoricalDriftTracker(df_reference, 'discrete_1', "datetime", "W", drift_limit='mad')
 
 analysis_score = detector.score(df_analysis, "discrete_1", "datetime")
 
@@ -89,8 +89,10 @@ spad_plus = SPAD(plus=True)
 spad_plus.fit(df)
 
 anomaly_scores = spad_plus.decision_function(df)
+anomaly_pred = spad_plus.predict(df)
 
 print(anomaly_scores)
+print(anomaly_pred)
 ```
 ### 5. Anomaly Tracker
 The Anomaly Tracker in TinyShift allows you to identify potential outliers based on the drift limit and anomaly scores generated during training. By setting a drift limit, the tracker can flag data points that exceed this threshold as possible outliers.
@@ -118,27 +120,49 @@ tinyshift
 ├── README.md
 ├── poetry.lock
 ├── pyproject.toml
-└── tinyshift
-    ├── examples
-    │   ├── outlier.ipynb
-    │   └── tracker.ipynb
-    ├── outlier
-    │   ├── __init__.py
-    │   ├── base.py
-    │   ├── hbos.py
-    │   └── spad.py
-    ├── plot
-    │   ├── __init__.py
-    │   └── plot.py
-    ├── tests
-    │   ├── test_hbos.py
-    │   └── test_spad.py
-    └── tracker
-        ├── anomaly.py
-        ├── base.py
-        ├── categorical.py
-        ├── continuous.py
-        └── performance.py      
+├── tinyshift
+│   ├── association_mining
+│   │   ├── README.md
+│   │   ├── __init__.py
+│   │   ├── analyzer.py
+│   │   └── encoder.py
+│   ├── examples
+│   │   ├── outlier.ipynb
+│   │   ├── tracker.ipynb
+│   │   └── transaction_analyzer.ipynb
+│   ├── modelling
+│   │   ├── __init__.py
+│   │   ├── multicollinearity.py
+│   │   ├── residualizer.py
+│   │   └── scaler.py
+│   ├── outlier
+│   │   ├── README.md
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── hbos.py
+│   │   ├── pca.py
+│   │   └── spad.py
+│   ├── plot
+│   │   ├── __init__.py
+│   │   ├── correlation.py
+│   │   └── plot.py
+│   ├── stats
+│   │   ├── __init__.py
+│   │   ├── bootstrap_bca.py
+│   │   ├── series.py
+│   │   ├── statistical_interval.py
+│   │   └── utils.py
+│   ├── tests
+│   │   ├── test.pca.py
+│   │   ├── test_hbos.py
+│   │   └── test_spad.py
+│   └── tracker
+│       ├── __init__.py
+│       ├── anomaly.py
+│       ├── base.py
+│       ├── categorical.py
+│       ├── continuous.py
+│       └── performance.py
 ```
 
 ### License
