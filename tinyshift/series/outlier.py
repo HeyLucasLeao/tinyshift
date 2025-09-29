@@ -95,7 +95,11 @@ def hampel_filter(
     return is_outlier
 
 
-def bollinger_bands(X, rolling_window=20, factor=2):
+def bollinger_bands(
+    X: Union[np.ndarray, List[float]],
+    rolling_window: int = 20,
+    factor: int = 2,
+) -> np.ndarray:
     """
     Feature transformer that computes the Bollinger Bands for a given time series.
     Bollinger Bands consist of a middle band (simple moving average) and two outer bands
@@ -123,19 +127,25 @@ def bollinger_bands(X, rolling_window=20, factor=2):
     - The bands help identify periods of high and low volatility in the time series.
     """
 
-    X = np.asarray(X).flatten()
-    seed = X[: rolling_window + 1]
-    upper_band = np.zeros_like(X)
-    lower_band = np.zeros_like(X)
-    mean_ = seed.mean()
-    std_ = seed.std()
-    upper_band[:rolling_window] = mean_ + factor * std_
-    lower_band[:rolling_window] = mean_ - factor * std_
+    X = np.asarray(X, dtype=np.float64).flatten()
 
-    for i in range(rolling_window, len(X)):
-        mean_ = X[1 + (i - rolling_window) : i + 1].mean()
-        std_ = X[1 + (i - rolling_window) : i + 1].std()
-        upper_band[i] = mean_ + factor * std_
-        lower_band[i] = mean_ - factor * std_
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
 
-    return (X < lower_band) | (X > upper_band)
+    is_outlier = np.zeros(X.shape[0], dtype=bool)
+    half_window = rolling_window // 2
+    center_indices = range(half_window, X.shape[0] - half_window)
+    window_indices = [
+        np.arange(i - half_window, i + half_window + 1) for i in center_indices
+    ]
+    windows = X[window_indices]
+    central_ = np.mean(windows, axis=1)
+    spread_ = np.std(windows, axis=1)
+    lower = central_ - factor * spread_
+    upper = central_ + factor * spread_
+
+    for i, idx in enumerate(center_indices):
+        if X[idx] > upper[i] or X[idx] < lower[i]:
+            is_outlier[idx] = True
+
+    return is_outlier
