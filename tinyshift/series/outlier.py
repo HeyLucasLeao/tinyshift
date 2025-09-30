@@ -5,6 +5,7 @@
 
 from typing import Union, List
 import numpy as np
+from tinyshift.stats import StatisticalInterval
 
 
 def hampel_filter(
@@ -127,7 +128,7 @@ def bollinger_bands(
     - The bands help identify periods of high and low volatility in the time series.
     """
 
-    X = np.asarray(X, dtype=np.float64).flatten()
+    X = np.asarray(X, dtype=np.float64)
 
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
@@ -139,10 +140,15 @@ def bollinger_bands(
         np.arange(i - half_window, i + half_window + 1) for i in center_indices
     ]
     windows = X[window_indices]
-    central_ = np.mean(windows, axis=1)
-    spread_ = np.std(windows, axis=1)
-    lower = central_ - factor * spread_
-    upper = central_ + factor * spread_
+    bounds = np.array(
+        [
+            StatisticalInterval.calculate_interval(
+                window, center=np.mean, spread=np.std, factor=factor
+            )
+            for window in windows
+        ]
+    )
+    lower, upper = bounds[:, 0], bounds[:, 1]
 
     for i, idx in enumerate(center_indices):
         if X[idx] > upper[i] or X[idx] < lower[i]:

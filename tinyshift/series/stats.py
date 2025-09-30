@@ -44,23 +44,23 @@ def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
         If input is not a list or numpy array.
     """
     X = np.asarray(X, dtype=np.float64)
-    rolling = np.diff(X)
-    size = len(rolling)
+    deltas = np.diff(X)
+    size = len(deltas)
 
     if 30 > len(X):
         raise ValueError("Insufficient data points (minimum 30 required)")
 
     def _calculate_rescaled_ranges(
-        rolling: np.ndarray, window_sizes: List[int]
+        deltas: np.ndarray, window_sizes: List[int]
     ) -> np.ndarray:
         """Helper function to calculate rescaled ranges (R/S) for each window size."""
         r_s = np.zeros(len(window_sizes), dtype=np.float64)
 
         for i, window_size in enumerate(window_sizes):
-            n_windows = len(rolling) // window_size
+            n_windows = len(deltas) // window_size
             truncated_size = n_windows * window_size
 
-            windows = rolling[:truncated_size].reshape(n_windows, window_size)
+            windows = deltas[:truncated_size].reshape(n_windows, window_size)
 
             means = np.mean(windows, axis=1, keepdims=True)
             std_devs = np.std(windows, axis=1, ddof=1)
@@ -82,7 +82,7 @@ def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
     max_power = int(np.floor(math.log2(size)))
     window_sizes = [2**power for power in range(1, max_power + 1)]
 
-    rescaled_ranges = _calculate_rescaled_ranges(rolling, window_sizes)
+    rescaled_ranges = _calculate_rescaled_ranges(deltas, window_sizes)
 
     log_sizes = np.log(window_sizes)
     log_r_s = np.log(rescaled_ranges)
