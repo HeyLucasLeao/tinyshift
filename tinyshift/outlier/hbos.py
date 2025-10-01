@@ -28,29 +28,39 @@ class HBOS(BaseHistogramModel):
     - Very efficient for high-dimensional data
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        dynamic_bins: bool = False,
+    ):
+        """
+        Parameters
+        ----------
+        dynamic_bins : bool, optional
+            If True, uses dynamic binning based on percentiles to create bins with approximately equal number  of samples.
+            This can improve density estimation for skewed distributions. Default is False.
+        """
+        self.dynamic_bins = dynamic_bins
         super().__init__()
 
     def fit(
         self,
         X: np.ndarray,
-        nbins: Union[int, str] = 10,
-        dynamic_bins: bool = False,
+        nbins: Union[int, str] = "auto",
     ) -> "HBOS":
         """
         Fit the HBOS model according to the given training data.
+
         Parameters
         ----------
         X : np.ndarray
             Training data, where `n_samples` is the number of samples and
             `n_features` is the number of features.
         nbins : Union[int, str], optional
-            The number of bins or binning strategy for discretization. \n
-            Options: \n
-                Integer:\n
+            The number of bins or binning strategy for discretization.
+            Options:
+                Integer:
                     - Exact number of bins to use for all continuous features
-
-                String options:\n
+                String options:
                     - 'auto': Minimum of 'sturges' and 'fd' estimators
                     - 'fd' (Freedman Diaconis): Robust to outliers
                     - 'doane': Improved Sturges for non-normal data
@@ -59,8 +69,7 @@ class HBOS(BaseHistogramModel):
                     - 'rice': Simple size-based estimator
                     - 'sturges': Optimal for Gaussian data
                     - 'sqrt': Square root of data size
-        dynamic_bins : bool, optional (default=False)
-            If True, the number of bins is determined dynamically for each feature.
+            - Default is 'auto'. Set to an integer for fixed binning. Set 10 to replicate original paper.
         Returns
         -------
         self : HBOS
@@ -89,7 +98,7 @@ class HBOS(BaseHistogramModel):
                     for value, count in value_counts.items()
                 }
                 self.feature_distributions.append(relative_frequencies)
-            elif dynamic_bins:
+            elif self.dynamic_bins:
                 percentiles = np.percentile(X[:, i], q=np.linspace(0, 100, nbins + 1))
                 bin_edges = np.unique(percentiles)
                 densities, _ = np.histogram(X[:, i], bins=bin_edges, density=True)
@@ -100,22 +109,6 @@ class HBOS(BaseHistogramModel):
 
         self.decision_scores_ = self.decision_function(X)
         return self
-
-    def _compute_outlier_score(self, X: np.ndarray, i: int) -> np.ndarray:
-        """
-        Compute the outlier score for a specific feature in the dataset.
-        """
-
-        if isinstance(self.feature_dtypes[i], pd.CategoricalDtype):
-            density = np.array(
-                [self.feature_distributions[i].get(value, 1e-9) for value in X[:, i]]
-            )
-        else:
-            densities, bin_edges = self.feature_distributions[i]
-            digitized = np.digitize(X[:, i], bin_edges, right=True)
-            bin_indices = np.clip(digitized - 1, 0, len(densities) - 1)
-            density = densities[bin_indices]
-        return -np.log(density + 1e-9)
 
     def decision_function(self, X: np.ndarray) -> np.ndarray:
         """
@@ -131,35 +124,3 @@ class HBOS(BaseHistogramModel):
             outlier_scores[:, i] = self._compute_outlier_score(X, i)
 
         return np.sum(outlier_scores, axis=1).ravel()
-
-    def predict(self, X: np.ndarray, quantile: float = 0.99) -> np.ndarray:
-        """
-        Identify outliers based on HBOS scores.
-
-        Parameters
-        ----------
-        X : ndarray of shape (n_samples, n_features)
-            Data to evaluate.
-        quantile : float, default=0.99
-
-        Returns
-        -------
-        outliers : ndarray of shape (n_samples,)
-            Boolean array where True indicates an outlier.
-
-        Raises
-        ------
-        ValueError
-            If model hasn't been fitted yet.
-
-        Notes
-        -----
-        - Following the original HBOS paper, higher scores indicate more anomalous observations
-        """
-        if self.decision_scores_ is None:
-            raise ValueError("Model must be fitted before prediction.")
-
-        X = check_array(X)
-        scores = self.decision_function(X)
-        threshold = np.quantile(self.decision_scores_, quantile, method="higher")
-        return scores > threshold

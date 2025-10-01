@@ -6,9 +6,11 @@
 from typing import Union, List, Dict
 import numpy as np
 import pandas as pd
+from sklearn.utils import check_array
+from sklearn.base import BaseEstimator
 
 
-class BaseHistogramModel:
+class BaseHistogramModel(BaseEstimator):
     """
     Base class for histogram-based models.
 
@@ -132,3 +134,67 @@ class BaseHistogramModel:
             raise TypeError(
                 "Input data must be a pandas Series, DataFrame, or numpy ndarray."
             )
+
+    def _compute_outlier_score(self, X: np.ndarray, i: int) -> np.ndarray:
+        """
+        Calculates the self-information (surprisal) outlier score for each value in a specified feature column.
+
+        This method quantifies how "surprising" or "rare" each value in the feature column is, based on its estimated probability.
+        The self-information is computed as the negative natural logarithm of the probability of each value: -log(p).
+        Higher scores indicate rarer (more outlier-like) values, while lower scores indicate more common values.
+
+        Parameters:
+            X (np.ndarray): The input data array of shape (n_samples, n_features).
+            i (int): The index of the feature column for which to compute outlier scores.
+
+        Returns:
+            np.ndarray: An array of self-information scores (digits) for each value in the specified feature column.
+
+        Notes:
+            - For categorical features, probabilities are retrieved from a precomputed distribution dictionary.
+              If a value is not found, a small probability (1e-9) is used to avoid log(0).
+            - For continuous features, probabilities are estimated using histogram binning.
+              Each value is assigned to a bin, and the corresponding bin probability is used.
+            - A small constant (1e-9) is added to probabilities to ensure numerical stability and avoid taking the logarithm of zero.
+        """
+
+        if isinstance(self.feature_dtypes[i], pd.CategoricalDtype):
+            densities = np.array(
+                [self.feature_distributions[i].get(value, 1e-9) for value in X[:, i]]
+            )
+        else:
+            probabilities, bin_edges = self.feature_distributions[i]
+            digitized = np.digitize(X[:, i], bin_edges, right=True)
+            bin_indices = np.clip(digitized - 1, 0, len(probabilities) - 1)
+            densities = probabilities[bin_indices]
+
+        return -np.log(densities + 1e-9)
+
+    def predict(self, X: np.ndarray, quantile: float = 0.99) -> np.ndarray:
+        """
+        Identify outliers based on anomaly scores.
+
+        Parameters
+        ----------
+        X : ndarray of shape (n_samples, n_features)
+            Data to evaluate.
+        quantile : float, default=0.01
+            Threshold quantile for outlier detection.
+
+        Raises
+        ------
+        ValueError
+            If model hasn't been fitted yet.
+
+        Notes
+        -----
+        - Following the original HBOS paper, higher scores indicate more anomalous observations.
+        """
+
+        if self.decision_scores_ is None:
+            raise ValueError("Model must be fitted before prediction.")
+
+        X = check_array(X)
+        scores = self.decision_function(X)
+        threshold = np.quantile(self.decision_scores_, quantile, method="higher")
+        return scores > threshold

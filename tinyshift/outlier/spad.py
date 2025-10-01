@@ -47,6 +47,12 @@ class SPAD(BaseHistogramModel):
     """
 
     def __init__(self, plus=False):
+        """
+        Parameters
+        ----------
+        plus : bool, optional
+            If True, applies PCA and concatenates transformed features. Default is False.
+        """
         self.pca_model = None
         self.plus = plus
         super().__init__()
@@ -54,48 +60,55 @@ class SPAD(BaseHistogramModel):
     def fit(
         self,
         X: np.ndarray,
-        nbins: Union[int, str] = 5,
+        nbins: Union[int, str] = "auto",
         random_state: int = 42,
-        method="stddev",
+        method="auto",
     ) -> "SPAD":
         """
-        Fit the SPAD model to the data.
+        Fit the SPAD model to the input data.
 
         Parameters
         ----------
         X : np.ndarray
-            The input data to fit. Must be a numpy array.
+            Input data array of shape (n_samples, n_features).
         nbins : Union[int, str], optional
-            The number of bins or binning strategy for discretization. \n
-            Options: \n
-                Integer:
-                    - Exact number of bins to use for all continuous features
+            Number of bins or binning strategy for discretizing continuous features. Options:
+            - Integer: Exact number of bins for all continuous features.
+            - String: Binning strategy, one of:
+                - 'auto': Minimum of 'sturges' and 'fd' estimators.
+                - 'fd': Freedman-Diaconis estimator (robust to outliers).
+                - 'doane': Improved Sturges for non-normal data.
+                - 'scott': Scott’s rule (efficient, less robust).
+                - 'stone': Information-theoretic approach.
+                - 'rice': Simple estimator based on sample size.
+                - 'sturges': Optimal for Gaussian data.
+                - 'sqrt': Square root of sample size.
+            - Default is 'auto'. Set to an integer for fixed binning. Set 5 to replicate original paper.
 
-                String options:
-                    - 'auto': Minimum of 'sturges' and 'fd' estimators
-                    - 'fd' (Freedman Diaconis): Robust to outliers
-                    - 'doane': Improved Sturges for non-normal data
-                    - 'scott': Less robust but computationally efficient
-                    - 'stone': Information-theoretic approach
-                    - 'rice': Simple size-based estimator
-                    - 'sturges': Optimal for Gaussian data
-                    - 'sqrt': Square root of data size
         random_state : int, optional
-            The random seed for reproducibility. Default is 42.
+            Random seed for reproducibility. Default is 42.
         method : str, optional
-            The method to compute the interval for continuous features. Default is "stddev", based on the original paper.
+            Method to compute the interval for continuous features. Options:
+            - "auto": Automatically selects the best method.
+            - "stddev": Uses mean ± 3 standard deviations. (Original SPAD method)
+            - "mad": Uses median ± 3*MAD.
+            - "iqr": Uses median ± 1.5*IQR.
+            - Callable: Custom function returning (lower, upper) bounds.
+            - Tuple: Pre-defined (lower, upper) bounds.
+            Default is "auto".
+
         Returns
         -------
         SPAD
-            The fitted SPAD model.
+            The fitted SPAD model instance.
 
         Notes
         -----
-        - The data types and column names are extracted and stored.
-        - If `self.plus` is True, PCA is applied to the data, and the transformed features are concatenated (SPAD+).
-        - For categorical features, relative frequencies are computed using Laplace smoothing.
-        - For continuous features, the data is discretized into bins, and probabilities are computed.
-        - The decision scores are computed and stored in `self.decision_scores_`.
+        - Extracts and stores feature data types and column names.
+        - If `self.plus` is True, applies PCA and concatenates principal components (SPAD+).
+        - For categorical features, computes relative frequencies with Laplace smoothing.
+        - For continuous features, discretizes into bins and estimates probabilities.
+        - Computes and stores anomaly scores in `self.decision_scores_`.
         """
         self._extract_feature_info(X)
 
@@ -132,38 +145,8 @@ class SPAD(BaseHistogramModel):
                 probabilities = (counts + 1) / (np.sum(counts) + len(unique_bins))
                 self.feature_distributions.append([probabilities, bin_edges])
 
-        self.decision_scores_ = self._compute_decision_scores(X)
+        self.decision_scores_ = self.decision_function(X)
         return self
-
-    def _compute_outlier_score(self, X: np.ndarray, i: int) -> np.ndarray:
-        """
-        Compute the outlier score for a specific feature column.
-        """
-
-        if isinstance(self.feature_dtypes[i], pd.CategoricalDtype):
-            densities = np.array(
-                [self.feature_distributions[i].get(value, 1e-9) for value in X[:, i]]
-            )
-        else:
-            probabilities, bin_edges = self.feature_distributions[i]
-            digitized = np.digitize(X[:, i], bin_edges, right=True)
-            bin_indices = np.clip(digitized - 1, 0, len(probabilities) - 1)
-            densities = probabilities[bin_indices]
-
-        return np.log(densities + 1e-9)
-
-    def _compute_decision_scores(self, X: np.ndarray) -> np.ndarray:
-        """
-        Compute decision scores for the input data.
-        """
-
-        X = check_array(X)
-        outlier_scores = np.zeros(shape=(X.shape[0], self.n_features))
-
-        for i in range(self.n_features):
-            outlier_scores[:, i] = self._compute_outlier_score(X, i)
-
-        return np.sum(outlier_scores, axis=1).ravel()
 
     def decision_function(self, X: np.ndarray) -> np.ndarray:
         """
@@ -173,37 +156,12 @@ class SPAD(BaseHistogramModel):
         self._check_columns(X)
 
         X = check_array(X)
+        outlier_scores = np.zeros(shape=(X.shape[0], self.n_features))
 
-        if self.plus:
+        if self.plus and X.shape[1] == self.n_features // 2:
             X = np.concatenate((X, self.pca_model.transform(X)), axis=1)
-        return self._compute_decision_scores(X)
 
-    def predict(self, X: np.ndarray, quantile: float = 0.01) -> np.ndarray:
-        """
-        Identify outliers based on SPAD anomaly scores.
+        for i in range(self.n_features):
+            outlier_scores[:, i] = self._compute_outlier_score(X, i)
 
-        Parameters
-        ----------
-        X : ndarray of shape (n_samples, n_features)
-            Data to evaluate.
-        quantile : float, default=0.01
-            Threshold quantile for outlier detection.
-
-        Raises
-        ------
-        ValueError
-            If model hasn't been fitted yet.
-
-        Notes
-        -----
-        - The threshold is computed from the training scores using np.quantile.
-        - Lower SPAD scores indicate more anomalous instances (log-probability sums).
-        """
-
-        if self.decision_scores_ is None:
-            raise ValueError("Model must be fitted before prediction.")
-
-        X = check_array(X)
-        scores = self.decision_function(X)
-        threshold = np.quantile(self.decision_scores_, quantile, method="lower")
-        return scores < threshold
+        return np.sum(outlier_scores, axis=1).ravel()
