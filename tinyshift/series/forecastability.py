@@ -3,12 +3,15 @@
 # Licensed under the MIT License
 
 
-from typing import Union, List
+from typing import Union, List, Tuple
 import numpy as np
 from scipy.signal import periodogram
+from tinyshift.series import sample_entropy
 
 
-def foreca(X: Union[np.ndarray, List[float]]) -> float:
+def foreca(
+    X: Union[np.ndarray, List[float]],
+) -> float:
     """
     Calculate the Forecastable Component Analysis (ForeCA) omega index for a given signal.
 
@@ -53,7 +56,9 @@ def foreca(X: Union[np.ndarray, List[float]]) -> float:
     return float(omega)
 
 
-def adi_cv(X):
+def adi_cv(
+    X: Union[np.ndarray, List[float]],
+) -> Tuple[float, float]:
     """
     Computes two key metrics for analyzing time series data: Average Demand Interval (ADI)
     and Coefficient of Variation (CV).
@@ -104,3 +109,40 @@ def adi_cv(X):
     cv = (np.std(X) / np.mean(X)) ** 2
 
     return adi, cv
+
+
+def maximum_achievable_accuracy(
+    X: Union[np.ndarray, List[float]],
+    m: int = 1,
+    tolerance: float = None,
+):
+    """
+    Calculate the Maximum Achievable Accuracy (Pimax) of a time series based on its Sample Entropy.
+    The Maximum Achievable Accuracy (Pimax) quantifies the predictability of a time series.
+    It is derived from the Sample Entropy (SampEn) of the series, which measures its complexity or irregularity.
+    A higher Pimax indicates a more predictable series, while a lower Pimax suggests greater randomness.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data.
+    m : int
+        Length of sequences to be compared (embedding dimension) for Sample Entropy calculation.
+    Returns
+    -------
+    pi_max : float
+        The Maximum Achievable Accuracy of the time series.
+    """
+
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+    deltas = np.diff(X)
+
+    hrate = sample_entropy(deltas, m=m, tolerance=tolerance)
+
+    log2_N = np.log2(len(X))
+    pi_max = 1 - (hrate / log2_N)
+
+    return pi_max
