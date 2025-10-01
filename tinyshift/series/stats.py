@@ -10,7 +10,9 @@ import math
 from tinyshift.series import sample_entropy
 
 
-def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
+def hurst_exponent(
+    X: Union[np.ndarray, List[float]],
+) -> Tuple[float, float]:
     """
     Calculate the Hurst exponent using a rescaled range (R/S) analysis approach with p-value for random walk hypothesis.
 
@@ -94,7 +96,10 @@ def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
     return float(slope), float(p_value)
 
 
-def relative_strength_index(X, rolling_window=14):
+def relative_strength_index(
+    X: Union[np.ndarray, List[float]],
+    rolling_window: int = 14,
+) -> np.ndarray:
     """
     Feature transformer that computes the Relative Strength Index (RSI) for a given time series.
 
