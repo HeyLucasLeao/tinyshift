@@ -59,9 +59,9 @@
 
 | Metric               | HBOS                          | SPAD                          | SPAD+                         | PCAReconstructionError         |
 |----------------------|-------------------------------|-------------------------------|-------------------------------|--------------------------------|
-| **Score Formula**    | `-log(density)`               | `log(probability)`            | `log(probability)` + PCA      | Squared reconstruction error   |
-| **Score Direction**  | ↑ (high = anomalous)          | ↓ (low = anomalous)           | ↓ (low = anomalous)           | ↑ (high = anomalous)          |
-| **Probability**      | `P = e^{-score}`              | `P = e^{score}`               | `P = e^{score}` (with PCA)    | Not probabilistic              |
+| **Score Formula**    | `-log(density)`               | `-log(probability)`           | `-log(probability)` + PCA     | Squared reconstruction error   |
+| **Score Direction**  | ↑ (high = anomalous)          | ↑ (high = anomalous)          | ↑ (high = anomalous)          | ↑ (high = anomalous)          |
+| **Probability**      | `P = e^{-score}`              | `P = e^{-score}`              | `P = e^{-score}` (with PCA)   | Not probabilistic              |
 
 ---
 

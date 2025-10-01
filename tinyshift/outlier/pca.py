@@ -6,9 +6,10 @@
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.utils import check_array
+from sklearn.base import BaseEstimator
 
 
-class PCAReconstructionError:
+class PCAReconstructionError(BaseEstimator):
     """
     Noise PCA-based outlier detector.
 

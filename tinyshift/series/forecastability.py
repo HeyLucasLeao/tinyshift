@@ -3,12 +3,14 @@
 # Licensed under the MIT License
 
 
-from typing import Union, List
+from typing import Union, List, Tuple
 import numpy as np
 from scipy.signal import periodogram
 
 
-def foreca(X: Union[np.ndarray, List[float]]) -> float:
+def foreca(
+    X: Union[np.ndarray, List[float]],
+) -> float:
     """
     Calculate the Forecastable Component Analysis (ForeCA) omega index for a given signal.
 
@@ -53,31 +55,33 @@ def foreca(X: Union[np.ndarray, List[float]]) -> float:
     return float(omega)
 
 
-def adi_cv(X):
+def adi_cv(
+    X: Union[np.ndarray, List[float]],
+) -> Tuple[float, float]:
     """
-    Computes two key metrics for analyzing time series data: Average Days of Inventory (ADI)
+    Computes two key metrics for analyzing time series data: Average Demand Interval (ADI)
     and Coefficient of Variation (CV).
 
-    1. Average Days of Inventory (ADI): Indicates the average number of periods between nonzero values in a time series.
+    1. Average Demand Interval (ADI): Indicates the average number of periods between nonzero values in a time series.
        - Higher ADI suggests more periods of zero or low values, indicating potential sparsity or infrequent activity.
        - ADI = n / n_nonzero, where n is the total number of periods and n_nonzero is the count of nonzero values.
 
-    2. Coefficient of Variation (CV): The ratio of the standard deviation to the mean of the time series.
+    2. Coefficient of Variation (CV): The squared ratio of the standard deviation to the mean of the time series.
        - Provides a normalized measure of dispersion, allowing for comparison across different time series regardless of their scale.
        - Higher CV indicates greater variability relative to the mean.
-       - CV = std(X) / mean(X)
+       - CV = (std(X) / mean(X)) ** 2
 
     Parameters
     ----------
     X : array-like, shape (n_samples,)
-        Time series data (e.g., closing prices, volumes, or other metrics).
+        Time series data (e.g., demand, sales, or other metrics).
 
     Returns
     -------
     adi : float
-        Average Days of Inventory for the time series.
+        Average Demand Interval for the time series.
     cv : float
-        Coefficient of Variation for the time series.
+        Squared Coefficient of Variation for the time series.
 
     Notes
     -----
@@ -85,18 +89,190 @@ def adi_cv(X):
         * Low ADI < 1.32 (frequent activity)
         * High ADI >= 1.32 (infrequent activity)
     - CV thresholds:
-        * Low CV < 0.5 (low variability)
-        * High CV >= 0.5 (high variability)
+        * Low CV < 0.49 (low variability)
+        * High CV >= 0.49 (high variability)
     - Classification of time series:
         * "Smooth":      Low ADI, Low CV — consistent activity, low variability, highly predictable.
         * "Intermittent":High ADI, Low CV — infrequent but regular activity, forecastable with specialized methods (e.g., Croston's, ADIDA, IMAPA).
         * "Erratic":     Low ADI, High CV — regular activity but high variability, high uncertainty.
         * "Lumpy":       High ADI, High CV — periods of inactivity followed by bursts, challenging to forecast.
     """
-    X = np.asarray(X).flatten()
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
     n = X.shape[0]
     n_nonzero = np.count_nonzero(X)
     adi = n / n_nonzero
-    cv = np.std(X) / np.mean(X)
+    cv = (np.std(X) / np.mean(X)) ** 2
 
     return adi, cv
+
+
+def sample_entropy(
+    X: Union[np.ndarray, List[float]],
+    m: int = 1,
+    tolerance: float = None,
+) -> np.ndarray:
+    """
+    Compute the Sample Entropy (SampEn) of a 1D time series.
+    Sample Entropy is a measure of complexity or irregularity in a time series.
+    It quantifies the likelihood that similar patterns in the data will not be followed by additional similar patterns.
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data.
+    m : int
+        Length of sequences to be compared (embedding dimension).
+    tolerance : float, optional (default=None)
+        Tolerance for accepting matches. If None, it is set to 0.1 * std(X).
+    Returns
+    -------
+    sampen : float
+        The Sample Entropy of the time series. Returns np.nan if A or B is zero.
+    References
+    ----------
+    - Richman, J. S., & Moorman, J. R. (2000). Physiological time-series analysis using approximate entropy and sample entropy. American Journal of Physiology-Heart and Circulatory Physiology, 278(6), H2039-H2049.
+    - Lake, D. E., Richman, J. S., Griffin, M. P., & Moorman, J. R. (2002). Sample entropy analysis of neonatal heart rate variability. American Journal of Physiology-Regulatory, Integrative and Comparative Physiology, 283(3), R789-R797.
+    Notes
+    -----
+    - SampEn is less biased than Approximate Entropy (ApEn) and does not count self-matches.
+    - Higher SampEn values indicate more complexity and irregularity in the time series.
+    - The function assumes the input time series is 1-dimensional.
+    - The function uses the Chebyshev distance (maximum norm) for comparing sequences.
+    - If either A or B is zero, SampEn is undefined and np.nan is returned.
+    """
+
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    if tolerance is None:
+        tolerance = 0.1 * np.std(X)
+
+    n = len(X)
+
+    Xm = np.array([X[i : i + m] for i in range(n - m)])
+
+    Xm1 = np.array([X[i : i + m + 1] for i in range(n - m - 1)])
+
+    def count_matches(X_templates, tol):
+        """
+        Count the number of matching template pairs within the given tolerance. Chebyshev distance is used.
+        Parameters
+        ----------
+        X_templates : ndarray, shape (N, m) or (N, m+1)
+            Array of template vectors.
+        tol : float
+            Tolerance for accepting matches.
+        Returns
+        -------
+        count : int
+            Number of matching template pairs.
+        """
+
+        count = 0
+        N = len(X_templates)
+        for i in range(N):
+            diff = np.abs(X_templates[i] - X_templates[i + 1 :])
+            max_diff = np.max(diff, axis=1)
+            count += np.sum(max_diff < tol)
+        return count
+
+    B = count_matches(Xm, tolerance)
+
+    A = count_matches(Xm1, tolerance)
+
+    if A > 0 and B > 0:
+        sampen = -np.log(A / B)
+    else:
+        sampen = np.nan
+
+    return sampen
+
+
+def maximum_achievable_accuracy(
+    X: Union[np.ndarray, List[float]],
+    m: int = 1,
+    tolerance: float = None,
+) -> float:
+    """
+    Calculate the Maximum Achievable Accuracy (Pimax) of a time series based on its Sample Entropy.
+    The Maximum Achievable Accuracy (Pimax) quantifies the predictability of a time series.
+    It is derived from the Sample Entropy (SampEn) of the series, which measures its complexity or irregularity.
+    A higher Pimax indicates a more predictable series, while a lower Pimax suggests greater randomness.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data.
+    m : int
+        Length of sequences to be compared (embedding dimension) for Sample Entropy calculation.
+    Returns
+    -------
+    pi_max : float
+        The Maximum Achievable Accuracy of the time series.
+    """
+
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+    deltas = np.diff(X)
+
+    hrate = sample_entropy(deltas, m=m, tolerance=tolerance)
+
+    log2_N = np.log2(len(X))
+    pi_max = 1 - (hrate / log2_N)
+
+    return pi_max
+
+
+def entropy_volatility(
+    X: Union[np.ndarray, List[float]],
+    rolling_window: int = 60,
+    m: int = 1,
+    tolerance: float = None,
+) -> np.ndarray:
+    """
+    Compute the rolling sample entropy (volatility entropy) of a time series.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data (e.g., log-prices).
+    rolling_window : int, optional (default=60)
+        Size of the rolling window (must be >= 3).
+    m : float, optional (default=1.0)
+        Embedding dimension for sample entropy.
+    tolerance : float, optional (default=None)
+        Tolerance for sample entropy. If None, set to 0.1 * std of window.
+
+    Returns
+    -------
+    hrate : ndarray, shape (n_samples - rolling_window + 1,)
+        Array of sample entropy values for each rolling window.
+    """
+    if rolling_window < 3:
+        raise ValueError("rolling_window must be >= 3")
+
+    X = np.asarray(X, dtype=np.float64)
+    deltas = np.diff(X)
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    half_window = rolling_window // 2
+    center_indices = range(half_window, deltas.shape[0] - half_window)
+
+    window_indices = [
+        np.arange(i - half_window, i + half_window + 1) for i in center_indices
+    ]
+    windows = deltas[window_indices]
+
+    hrate = np.array(
+        [sample_entropy(delta, m=m, tolerance=tolerance) for delta in windows]
+    )
+
+    return hrate
