@@ -233,7 +233,7 @@ def maximum_achievable_accuracy(
 def entropy_volatility(
     X: Union[np.ndarray, List[float]],
     rolling_window: int = 60,
-    m: float = 1.0,
+    m: int = 1,
     tolerance: float = None,
 ) -> np.ndarray:
     """
