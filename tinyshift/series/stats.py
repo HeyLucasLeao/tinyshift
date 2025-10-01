@@ -119,7 +119,11 @@ def relative_strength_index(X, rolling_window=14):
     - Higher values indicate stronger positive momentum; lower values indicate stronger negative momentum.
     - Preserves the length of the input series; the first `rolling_window` values are initialized with the first computed RSI.
     """
-    X = np.asarray(X).flatten()
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
     deltas = np.diff(X)
     seed = deltas[: rolling_window + 1]
     mean_gain = seed[seed >= 0].sum() / rolling_window

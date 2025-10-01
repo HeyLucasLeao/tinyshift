@@ -93,7 +93,11 @@ def adi_cv(X):
         * "Erratic":     Low ADI, High CV — regular activity but high variability, high uncertainty.
         * "Lumpy":       High ADI, High CV — periods of inactivity followed by bursts, challenging to forecast.
     """
-    X = np.asarray(X).flatten()
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+    
     n = X.shape[0]
     n_nonzero = np.count_nonzero(X)
     adi = n / n_nonzero
