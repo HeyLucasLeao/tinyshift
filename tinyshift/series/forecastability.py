@@ -118,6 +118,10 @@ def maximum_achievable_accuracy(
 ):
     """
     Calculate the Maximum Achievable Accuracy (Pimax) of a time series based on its Sample Entropy.
+    The Maximum Achievable Accuracy (Pimax) quantifies the predictability of a time series.
+    It is derived from the Sample Entropy (SampEn) of the series, which measures its complexity or irregularity.
+    A higher Pimax indicates a more predictable series, while a lower Pimax suggests greater randomness.
+
     Parameters
     ----------
     X : array-like, shape (n_samples,)
