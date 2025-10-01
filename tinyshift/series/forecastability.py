@@ -55,29 +55,29 @@ def foreca(X: Union[np.ndarray, List[float]]) -> float:
 
 def adi_cv(X):
     """
-    Computes two key metrics for analyzing time series data: Average Days of Inventory (ADI)
+    Computes two key metrics for analyzing time series data: Average Demand Interval (ADI)
     and Coefficient of Variation (CV).
 
-    1. Average Days of Inventory (ADI): Indicates the average number of periods between nonzero values in a time series.
+    1. Average Demand Interval (ADI): Indicates the average number of periods between nonzero values in a time series.
        - Higher ADI suggests more periods of zero or low values, indicating potential sparsity or infrequent activity.
        - ADI = n / n_nonzero, where n is the total number of periods and n_nonzero is the count of nonzero values.
 
-    2. Coefficient of Variation (CV): The ratio of the standard deviation to the mean of the time series.
+    2. Coefficient of Variation (CV): The squared ratio of the standard deviation to the mean of the time series.
        - Provides a normalized measure of dispersion, allowing for comparison across different time series regardless of their scale.
        - Higher CV indicates greater variability relative to the mean.
-       - CV = std(X) / mean(X)
+       - CV = (std(X) / mean(X)) ** 2
 
     Parameters
     ----------
     X : array-like, shape (n_samples,)
-        Time series data (e.g., closing prices, volumes, or other metrics).
+        Time series data (e.g., demand, sales, or other metrics).
 
     Returns
     -------
     adi : float
-        Average Days of Inventory for the time series.
+        Average Demand Interval for the time series.
     cv : float
-        Coefficient of Variation for the time series.
+        Squared Coefficient of Variation for the time series.
 
     Notes
     -----
@@ -85,8 +85,8 @@ def adi_cv(X):
         * Low ADI < 1.32 (frequent activity)
         * High ADI >= 1.32 (infrequent activity)
     - CV thresholds:
-        * Low CV < 0.5 (low variability)
-        * High CV >= 0.5 (high variability)
+        * Low CV < 0.49 (low variability)
+        * High CV >= 0.49 (high variability)
     - Classification of time series:
         * "Smooth":      Low ADI, Low CV — consistent activity, low variability, highly predictable.
         * "Intermittent":High ADI, Low CV — infrequent but regular activity, forecastable with specialized methods (e.g., Croston's, ADIDA, IMAPA).
@@ -97,10 +97,10 @@ def adi_cv(X):
 
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
-    
+
     n = X.shape[0]
     n_nonzero = np.count_nonzero(X)
     adi = n / n_nonzero
-    cv = np.std(X) / np.mean(X)
+    cv = (np.std(X) / np.mean(X)) ** 2
 
     return adi, cv
