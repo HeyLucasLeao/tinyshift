@@ -150,7 +150,7 @@ def relative_strength_index(
     return rsi
 
 
-def volatility_entropy(
+def entropy_volatility(
     X: Union[np.ndarray, List[float]],
     rolling_window: int = 60,
     m: float = 1.0,
