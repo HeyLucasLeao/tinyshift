@@ -7,6 +7,7 @@ from typing import Union, Tuple, List
 import numpy as np
 import scipy
 import math
+from tinyshift.series import sample_entropy
 
 
 def hurst_exponent(X: Union[np.ndarray, List[float]]) -> Tuple[float, float]:
@@ -142,3 +143,51 @@ def relative_strength_index(X, rolling_window=14):
         rsi[i] = 100.0 - 100.0 / (1.0 + rs)
 
     return rsi
+
+
+def volatility_entropy(
+    X: Union[np.ndarray, List[float]],
+    rolling_window: int = 60,
+    m: float = 1.0,
+    tolerance: float = None,
+) -> np.ndarray:
+    """
+    Compute the rolling sample entropy (volatility entropy) of a time series.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data (e.g., log-prices).
+    rolling_window : int, optional (default=60)
+        Size of the rolling window (must be >= 3).
+    m : float, optional (default=1.0)
+        Embedding dimension for sample entropy.
+    tolerance : float, optional (default=None)
+        Tolerance for sample entropy. If None, set to 0.1 * std of window.
+
+    Returns
+    -------
+    hrate : ndarray, shape (n_samples - rolling_window + 1,)
+        Array of sample entropy values for each rolling window.
+    """
+    if rolling_window < 3:
+        raise ValueError("rolling_window must be >= 3")
+
+    X = np.asarray(X, dtype=np.float64)
+    deltas = np.diff(X)
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    half_window = rolling_window // 2
+    center_indices = range(half_window, deltas.shape[0] - half_window)
+
+    window_indices = [
+        np.arange(i - half_window, i + half_window + 1) for i in center_indices
+    ]
+    windows = deltas[window_indices]
+
+    hrate = np.array(
+        [sample_entropy(delta, m=m, tolerance=tolerance) for delta in windows]
+    )
+
+    return hrate
