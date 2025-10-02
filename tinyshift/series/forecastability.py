@@ -150,7 +150,7 @@ def sample_entropy(
         raise ValueError("Input data must be 1-dimensional")
 
     if tolerance is None:
-        tolerance = 0.1 * np.std(X)
+        tolerance = 0.2 * np.std(X)
 
     n = len(X)
 
@@ -220,9 +220,8 @@ def maximum_achievable_accuracy(
 
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
-    deltas = np.diff(X)
 
-    hrate = sample_entropy(deltas, m=m, tolerance=tolerance)
+    hrate = sample_entropy(X, m=m, tolerance=tolerance)
 
     log2_N = np.log2(len(X))
     pi_max = 1 - (hrate / log2_N)
