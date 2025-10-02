@@ -6,6 +6,7 @@
 from typing import Union, List
 import numpy as np
 from tinyshift.stats import StatisticalInterval
+from tinyshift.stats import trailing_window
 
 
 def hampel_filter(
@@ -134,24 +135,15 @@ def bollinger_bands(
         raise ValueError("Input data must be 1-dimensional")
 
     is_outlier = np.zeros(X.shape[0], dtype=bool)
-    half_window = rolling_window // 2
-    center_indices = range(half_window, X.shape[0] - half_window)
-    window_indices = [
-        np.arange(i - half_window, i + half_window + 1) for i in center_indices
-    ]
-    windows = X[window_indices]
-    bounds = np.array(
-        [
-            StatisticalInterval.calculate_interval(
-                window, center=np.mean, spread=np.std, factor=factor
-            )
-            for window in windows
-        ]
+    bounds = trailing_window(
+        X,
+        rolling_window=rolling_window,
+        func=StatisticalInterval.calculate_interval,
+        center=np.mean,
+        spread=np.std,
+        factor=factor,
     )
-    lower, upper = bounds[:, 0], bounds[:, 1]
 
-    for i, idx in enumerate(center_indices):
-        if X[idx] > upper[i] or X[idx] < lower[i]:
-            is_outlier[idx] = True
+    is_outlier = np.where((X < bounds[:, 0]) | (X > bounds[:, 1]), True, is_outlier)
 
     return is_outlier

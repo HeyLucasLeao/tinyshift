@@ -147,3 +147,41 @@ def relative_strength_index(
         rsi[i] = 100.0 - 100.0 / (1.0 + rs)
 
     return rsi
+
+
+def standardize_returns(X, log=True, standardize=True) -> np.ndarray:
+    """
+    Calculates and normalizes the returns of a time series.
+
+    The function computes either logarithmic or simple returns from the
+    input series and then standardizes the resulting return series
+    (Z-score normalization).
+
+    Parameters
+    ----------
+    X : array-like
+        A 1-dimensional time series (e.g., prices, sales figures, volume).
+    log : bool, default=True
+        If True, calculates **logarithmic returns**: r_t = ln(X_t / X_{t-1}).
+        If False, calculates **simple (percentage) returns**: R_t = (X_t / X_{t-1}) - 1.
+    standardize : bool, default=True
+        If True, standardizes the return series to have zero mean and unit variance.
+
+    Returns
+    -------
+    norm : np.ndarray
+        The normalized return series (with zero mean and unit standard deviation).
+
+    Raises
+    ------
+    ValueError
+        If the input data 'X' is not 1-dimensional.
+    """
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    ratios = X[1:] / X[:-1]
+    returns = np.log(ratios) if log else ratios - 1
+    return (returns - np.mean(returns)) / np.std(returns) if standardize else returns

@@ -4,7 +4,7 @@
 
 
 import numpy as np
-from typing import Union, List
+from typing import Union, List, Callable
 
 
 def chebyshev_guaranteed_percentage(
@@ -50,3 +50,47 @@ def chebyshev_guaranteed_percentage(
         k_values.append(k_upper)
     k = float(min(k_values))
     return 1 - (1 / (k**2)) if k > 1 else 0
+
+
+def trailing_window(
+    X: Union[np.ndarray, List[float]],
+    rolling_window: int = 60,
+    func: Callable = None,
+    **kwargs,
+) -> np.ndarray:
+    """
+    Apply a function over a trailing (rolling) window of a 1D time series.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data (e.g., log-prices).
+    rolling_window : int, optional (default=60)
+        Size of the rolling window (must be >= 3).
+    func : Callable
+        Function to apply to each window. Must accept a 1D array as first argument.
+    **kwargs
+        Additional keyword arguments to pass to `func`.
+
+    Returns
+    -------
+    result : ndarray, shape (n_samples - rolling_window + 1,)
+        Array of function values for each rolling window.
+    """
+    if rolling_window < 2:
+        raise ValueError("rolling_window must be >= 2")
+
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    window_indices = [
+        np.arange(i, i + rolling_window) for i in range(X.shape[0] - rolling_window + 1)
+    ]
+
+    windows = X[window_indices]
+
+    result = np.array([func(window, **kwargs) for window in windows])
+
+    return np.concatenate(([result[0]] * (rolling_window - 1), result))

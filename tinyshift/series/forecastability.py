@@ -149,10 +149,19 @@ def sample_entropy(
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
 
+    n = X.shape[0]
+
     if tolerance is None:
         tolerance = 0.2 * np.std(X)
 
-    n = len(X)
+    if m < 1:
+        raise ValueError("m must be a positive integer")
+
+    if tolerance <= 0:
+        raise ValueError("tolerance must be a positive float")
+
+    if m > n:
+        raise ValueError("m must be less or equal to length of the time series")
 
     Xm = np.array([X[i : i + m] for i in range(n - m)])
 
@@ -227,51 +236,3 @@ def maximum_achievable_accuracy(
     pi_max = 1 - (hrate / log2_N)
 
     return pi_max
-
-
-def entropy_volatility(
-    X: Union[np.ndarray, List[float]],
-    rolling_window: int = 60,
-    m: int = 1,
-    tolerance: float = None,
-) -> np.ndarray:
-    """
-    Compute the rolling sample entropy (volatility entropy) of a time series.
-
-    Parameters
-    ----------
-    X : array-like, shape (n_samples,)
-        1D time series data (e.g., log-prices).
-    rolling_window : int, optional (default=60)
-        Size of the rolling window (must be >= 3).
-    m : float, optional (default=1.0)
-        Embedding dimension for sample entropy.
-    tolerance : float, optional (default=None)
-        Tolerance for sample entropy. If None, set to 0.1 * std of window.
-
-    Returns
-    -------
-    hrate : ndarray, shape (n_samples - rolling_window + 1,)
-        Array of sample entropy values for each rolling window.
-    """
-    if rolling_window < 3:
-        raise ValueError("rolling_window must be >= 3")
-
-    X = np.asarray(X, dtype=np.float64)
-    deltas = np.diff(X)
-    if X.ndim != 1:
-        raise ValueError("Input data must be 1-dimensional")
-
-    half_window = rolling_window // 2
-    center_indices = range(half_window, deltas.shape[0] - half_window)
-
-    window_indices = [
-        np.arange(i - half_window, i + half_window + 1) for i in center_indices
-    ]
-    windows = deltas[window_indices]
-
-    hrate = np.array(
-        [sample_entropy(delta, m=m, tolerance=tolerance) for delta in windows]
-    )
-
-    return hrate
