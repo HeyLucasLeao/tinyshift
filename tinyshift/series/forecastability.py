@@ -149,10 +149,19 @@ def sample_entropy(
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
 
+    n = X.shape[0]
+
     if tolerance is None:
         tolerance = 0.2 * np.std(X)
 
-    n = len(X)
+    if m < 1:
+        raise ValueError("m must be a positive integer")
+
+    if tolerance <= 0:
+        raise ValueError("tolerance must be a positive float")
+
+    if m > n:
+        raise ValueError("m must be less or equal to length of the time series")
 
     Xm = np.array([X[i : i + m] for i in range(n - m)])
 
