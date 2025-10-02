@@ -149,7 +149,7 @@ def relative_strength_index(
     return rsi
 
 
-def returns(X, log=True, standardize=True) -> np.ndarray:
+def standardize_returns(X, log=True, standardize=True) -> np.ndarray:
     """
     Calculates and normalizes the returns of a time series.
 
@@ -182,6 +182,6 @@ def returns(X, log=True, standardize=True) -> np.ndarray:
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
 
-    returns = X / np.roll(X, 1)
-    returns = np.log(returns) if log else returns - 1
+    ratios = X[1:] / X[:-1]
+    returns = np.log(ratios) if log else ratios - 1
     return (returns - np.mean(returns)) / np.std(returns) if standardize else returns

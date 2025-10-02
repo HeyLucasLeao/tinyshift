@@ -78,7 +78,7 @@ def trailing_window(
         Array of function values for each rolling window.
     """
     if rolling_window < 2:
-        raise ValueError("rolling_window must be >= 3")
+        raise ValueError("rolling_window must be >= 2")
 
     X = np.asarray(X, dtype=np.float64)
 
