@@ -117,8 +117,10 @@ def sample_entropy(
 ) -> np.ndarray:
     """
     Compute the Sample Entropy (SampEn) of a 1D time series.
+
     Sample Entropy is a measure of complexity or irregularity in a time series.
     It quantifies the likelihood that similar patterns in the data will not be followed by additional similar patterns.
+
     Parameters
     ----------
     X : array-like, shape (n_samples,)
@@ -170,6 +172,7 @@ def sample_entropy(
     def count_matches(X_templates, tol):
         """
         Count the number of matching template pairs within the given tolerance. Chebyshev distance is used.
+
         Parameters
         ----------
         X_templates : ndarray, shape (N, m) or (N, m+1)
@@ -200,3 +203,28 @@ def sample_entropy(
         sampen = np.nan
 
     return sampen
+
+
+def pattern_stability_index(X, m=1, tolerance=None):
+    """
+    Calculates the Pattern Stability Index based on Sample Entropy (SampEn).
+
+    The Sample Entropy (hrate) measures the complexity and irregularity of a time series.
+    This metric inverts the entropy to quantify the *regularity* or *predictability*
+    of the series, showing the probability that a similar pattern will persist.
+
+    The formula used is 1 / (2 ** hrate).
+
+    Args:
+        X (array-like): The time series data (e.g., standardized returns).
+        m (int, optional): The embedding dimension (length of the pattern). Defaults to 1.
+        tolerance (float, optional): The similarity criterion (r). If None, the
+            implementation of sample_entropy will use its default (often 0.2 * std(X)).
+
+    Returns:
+        float: The Pattern Stability Index.
+               - A value close to 1 indicates HIGH stability/regularity (highly predictable patterns).
+               - A value close to 0 indicates LOW stability/regularity (highly random/complex series).
+    """
+    hrate = sample_entropy(X, m=m, tolerance=tolerance)
+    return 1 / np.exp(hrate)
