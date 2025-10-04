@@ -6,6 +6,8 @@
 from typing import Union, List, Tuple
 import numpy as np
 from scipy.signal import periodogram
+from collections import Counter
+import math
 
 
 def foreca(
@@ -117,8 +119,10 @@ def sample_entropy(
 ) -> np.ndarray:
     """
     Compute the Sample Entropy (SampEn) of a 1D time series.
+
     Sample Entropy is a measure of complexity or irregularity in a time series.
     It quantifies the likelihood that similar patterns in the data will not be followed by additional similar patterns.
+
     Parameters
     ----------
     X : array-like, shape (n_samples,)
@@ -170,6 +174,7 @@ def sample_entropy(
     def count_matches(X_templates, tol):
         """
         Count the number of matching template pairs within the given tolerance. Chebyshev distance is used.
+
         Parameters
         ----------
         X_templates : ndarray, shape (N, m) or (N, m+1)
@@ -200,3 +205,114 @@ def sample_entropy(
         sampen = np.nan
 
     return sampen
+
+
+def pattern_stability_index(
+    X: Union[np.ndarray, List[float]],
+    m: int = 1,
+    tolerance=None,
+) -> float:
+    """
+    Calculates the Pattern Stability Index based on Sample Entropy (SampEn).
+
+    The Sample Entropy (hrate) measures the complexity and irregularity of a time series.
+    This metric inverts the entropy to quantify the *regularity* or *predictability*
+    of the series, showing the probability that a similar pattern will persist.
+
+    The formula used is 1 / (2 ** hrate).
+
+    Args:
+        X (array-like): The time series data (e.g., standardized returns).
+        m (int, optional): The embedding dimension (length of the pattern). Defaults to 1.
+        tolerance (float, optional): The similarity criterion (r). If None, the
+            implementation of sample_entropy will use its default (often 0.2 * std(X)).
+
+    Returns:
+        float: The Pattern Stability Index.
+               - A value close to 1 indicates HIGH stability/regularity (highly predictable patterns).
+               - A value close to 0 indicates LOW stability/regularity (highly random/complex series).
+    """
+    hrate = sample_entropy(X, m=m, tolerance=tolerance)
+    return 1 / np.exp(hrate)
+
+
+def permutation_entropy(
+    X: Union[np.ndarray, List[float]],
+    m: int = 3,
+    delay: int = 1,
+    normalize=True,
+):
+    """
+    Calculate the Permutation Entropy of a time series.
+
+    Parameters
+    ----------
+        X : array-like, shape (n_samples,)
+            Time series data (e.g., closing prices).
+        m : int, optional (default=3)
+            The embedding dimension (length of the pattern).
+        delay : int, optional (default=1)
+            The time delay (spacing between elements in the pattern).
+        normalize : bool, optional (default=False)
+            If True, normalize the entropy to the range [0, 1].
+
+    Returns
+    -------
+    float
+        The Permutation Entropy of the time series.
+
+    Notes
+    -----
+    - The Permutation Entropy quantifies the complexity of a time series based on the order relations between values.
+    - It is calculated by mapping the time series to a sequence of ordinal patterns and computing the
+    Shannon entropy of the distribution of these patterns.
+    - Higher values indicate more complexity and randomness in the time series.
+    - The function preserves the length of the input series.
+    """
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+    if m < 2:
+        raise ValueError("m must be at least 2")
+    if delay < 1:
+        raise ValueError("delay must be at least 1")
+    if len(X) < (m - 1) * delay + 1:
+        raise ValueError("Time series is too short for the given m and delay")
+
+    N = X.shape[0] - delay * (m - 1)
+    window_indices = [np.arange(i, i + delay * m, delay) for i in range(N)]
+    X = np.argsort(X[window_indices], axis=1)
+    patterns = Counter(map(tuple, X))
+    probs = {k: v / sum(patterns.values()) for k, v in patterns.items()}
+    probs = np.array(list(probs.values()))
+    pe = -np.sum(probs * np.log2(probs))
+    return pe / np.log2(math.factorial(m)) if normalize else pe
+
+
+def maximum_achievable_predictability(
+    X: Union[np.ndarray, List[float]],
+    m: int = 3,
+    delay: int = 1,
+) -> float:
+    """
+    Calculates the Maximum Achievable Predictability (Πmax) based on the theoretical limit:
+    Πmax = 1 - normalized Permutation Entropy (PE).
+    Πmax ranges from 0 (completely unpredictable) to 1 (perfectly predictable).
+
+    Parameters:
+        X (array-like): The time series data (e.g., closing prices).
+        m (int, optional): The embedding dimension (length of the pattern). Defaults to 3.
+        delay (int, optional): The time delay (spacing between elements in the pattern). Defaults to 1.
+    Returns:
+        float: The Maximum Achievable Predictability (Πmax).
+
+    Notes
+    -----
+    - The function assumes the input time series is 1-dimensional.
+    - Higher Πmax values indicate more predictable patterns in the time series.
+    - The function uses the Permutation Entropy as a measure of complexity.
+    """
+    pe = permutation_entropy(X, m=m, delay=delay, normalize=True)
+
+    return 1 - pe
