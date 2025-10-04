@@ -100,6 +100,8 @@ def hampel_filter(
 def bollinger_bands(
     X: Union[np.ndarray, List[float]],
     rolling_window: int = 20,
+    center: int = np.mean,
+    spread: int = np.std,
     factor: int = 2,
 ) -> np.ndarray:
     """
@@ -116,17 +118,20 @@ def bollinger_bands(
         The number of periods to use for calculating the moving average and standard deviation.
     factor : float, optional (default=2)
         The number of standard deviations to use for the upper and lower bands.
+    center : callable, optional (default=np.mean)
+        Function to compute the center (e.g., mean or median) of the window.
+    spread : callable, optional (default=np.std)
+        Function to compute the spread (e.g., standard deviation or MAD) of the window.
+
     Returns
     -------
-    lower_band : ndarray, shape (n_samples,)
-        The lower Bollinger Band values for the time series.
-    upper_band : ndarray, shape (n_samples,)
-        The upper Bollinger Band values for the time series.
+    outliers : ndarray, shape (n_samples,)
+        Boolean array indicating outliers (True) and inliers (False).
+
     Notes
     -----
-    - The Bollinger Bands are calculated using a rolling rolling_window approach.
-    - The first `rolling_window` values are initialized with the mean and standard deviation of the initial rolling_window.
-    - The bands help identify periods of high and low volatility in the time series.
+    - The Bollinger Bands are calculated using a rolling window approach.
+    - Outliers are points outside the upper or lower band.
     """
 
     X = np.asarray(X, dtype=np.float64)
@@ -139,8 +144,8 @@ def bollinger_bands(
         X,
         rolling_window=rolling_window,
         func=StatisticalInterval.calculate_interval,
-        center=np.mean,
-        spread=np.std,
+        center=center,
+        spread=spread,
         factor=factor,
     )
 
