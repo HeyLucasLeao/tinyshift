@@ -94,3 +94,8 @@ def trailing_window(
     result = np.array([func(window, **kwargs) for window in windows])
 
     return np.concatenate(([result[0]] * (rolling_window - 1), result))
+
+
+def mad(x):
+    """Calculate the Median Absolute Deviation (MAD) of a 1D array."""
+    return np.median(np.absolute(x - np.median(x)))
