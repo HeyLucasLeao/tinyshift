@@ -244,27 +244,30 @@ def permutation_entropy(
 ):
     """
     Calculate the Permutation Entropy of a time series.
+
     Parameters
     ----------
-    X : array-like, shape (n_samples,)
-        Time series data (e.g., closing prices).
+        X : array-like, shape (n_samples,)
+            Time series data (e.g., closing prices).
         m : int, optional (default=3)
-        The embedding dimension (length of the pattern).
+            The embedding dimension (length of the pattern).
         delay : int, optional (default=1)
-        The time delay (spacing between elements in the pattern).
+            The time delay (spacing between elements in the pattern).
         normalize : bool, optional (default=False)
-        If True, normalize the entropy to the range [0, 1].
-        Returns
-        -------
-        float
-            The Permutation Entropy of the time series.
-        Notes
-        -----
-        - The Permutation Entropy quantifies the complexity of a time series based on the order relations between values.
-        - It is calculated by mapping the time series to a sequence of ordinal patterns and computing the
-        Shannon entropy of the distribution of these patterns.
-        - Higher values indicate more complexity and randomness in the time series.
-        - The function preserves the length of the input series.
+            If True, normalize the entropy to the range [0, 1].
+
+    Returns
+    -------
+    float
+        The Permutation Entropy of the time series.
+
+    Notes
+    -----
+    - The Permutation Entropy quantifies the complexity of a time series based on the order relations between values.
+    - It is calculated by mapping the time series to a sequence of ordinal patterns and computing the
+    Shannon entropy of the distribution of these patterns.
+    - Higher values indicate more complexity and randomness in the time series.
+    - The function preserves the length of the input series.
     """
     X = np.asarray(X, dtype=np.float64)
 
@@ -304,6 +307,8 @@ def maximum_achievable_predictability(
     Returns:
         float: The Maximum Achievable Predictability (Πmax).
 
+    Notes
+    -----
     - The function assumes the input time series is 1-dimensional.
     - Higher Πmax values indicate more predictable patterns in the time series.
     - The function uses the Permutation Entropy as a measure of complexity.
