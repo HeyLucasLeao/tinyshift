@@ -31,13 +31,17 @@ The `series` module of tinyshift provides quantitative tools for time series ana
   Computes Sample Entropy, a robust measure of complexity and irregularity in time series. Low values indicate more regularity (repetitive patterns), high values indicate greater complexity (less repetition, more "randomness").  
   **When to use:** To quantify the complexity/irregularity of a series, especially in physiological, financial, or industrial contexts. Useful for comparing variability patterns between series or periods.
 
-- **`entropy_volatility`**  
-  Measures the volatility of a time series based on the entropy of returns or differences. Higher values indicate greater uncertainty/volatility in the series dynamics.  
-  **When to use:** To quantify the local instability or unpredictability of a series, especially useful in financial series, sensors, and industrial processes.
+- **`permutation_entropy`**  
+  Measures permutation entropy, quantifying complexity based on the order of values.  
+  **When to use:** To assess the randomness and ordinal complexity of a series, especially useful for pattern analysis and regime change detection.
 
-- **`maximum_achievable_accuracy`**  
-  Calculates the theoretical maximum predictability of a time series, based on Shannon entropy. Indicates the upper limit of how predictable a series can be, given its distribution pattern.  
-  **When to use:** To assess the maximum potential accuracy of predictive models, or compare the predictability limit between different series.
+- **`pattern_stability_index`**  
+  Measures pattern stability based on sample entropy. Values close to 1 indicate high regularity/pattern persistence, values near 0 indicate high randomness.  
+  **When to use:** To quantify the regularity of patterns in time series, useful in biomedical, industrial, and financial applications.
+
+- **`maximum_achievable_predictability`**  
+  Calculates the Maximum Achievable Predictability (Πmax) of a series, based on normalized permutation entropy. Values close to 1 indicate high predictability (low complexity/randomness), values near 0 indicate low predictability (high complexity/randomness).  
+  **When to use:** To estimate the theoretical predictability limit of a time series, especially useful for comparing series with different order patterns and complexity.
 
 ### 3. Trend & Memory
 
@@ -54,14 +58,17 @@ The `series` module of tinyshift provides quantitative tools for time series ana
 
 ## Summary: When to use each function?
 
-| Metric/Function              | Range         | Interpretation                                             | Question You Want to Answer                                         | Recommended use                                              |
-|------------------------------|--------------|------------------------------------------------------------|-------------------------------------------------------------|--------------------------------------------------------------|
-| **Hampel Filter**            | 0 or 1       | Outlier presence (per point)                               | “Is this point an outlier relative to its local window?”    | Detect local outliers/volatility in time series              |
-| **Forecastability (ForeCA)** | 0 → 1        | Forecastability (1 = highly predictable, 0 = noise)        | “How predictable is this time series?”                      | Assess predictability, seasonality/trend strength            |
-| **ADI / CV**                 | ADI: 1 → ∞   | ADI: Intermittency; CV: Variability                        | “Is this series intermittent or erratic?”                   | Classify demand: smooth, intermittent, erratic, lumpy        |
-| **Sample Entropy (SampEn)**  | 0 → ∞        | Complexity/regularity (low = more regular, high = more complex) | “How complex or irregular is this time series?”             | Quantify complexity, compare variability patterns            |
-| **Hurst Exponent**           | 0 → 1        | Trend persistence/long-term memory                         | “Does the series have persistent trend or mean-revert?”     | Detect long memory, trend, or random walk                    |
-| **Entropy Volatility**       | 0 → log(N)   | Volatility based on entropy of returns                     | “How uncertain/volatile is the local series dynamics?”       | Quantify instability, compare volatility between series      |
-| **Maximum Achievable Accuracy** | 0 → 1     | Theoretical predictability limit (1 = fully predictable)   | “What is the maximum achievable forecast accuracy for this series?” | Assess model limits, compare series                        |
-| **Bollinger Bands**          | 0 or 1       | Signals breakouts and volatility regimes                   | “Is the value outside the expected volatility range?”        | Identify volatility changes, overbought/oversold zones       |
-| **Relative Strength Index (RSI)** | 0 → 100 | Relative strength/momentum index                           | “Is the series overbought or oversold?”                      | Detect trend strength, reversal points                       |
+| Metric/Function                        | Range         | Interpretation                                             | Question You Want to Answer                                         | Recommended use                                              |
+| Metric/Function                        | Range         | Interpretation                                             | Question You Want to Answer                                         | Recommended Use                                              |
+|----------------------------------------|--------------|------------------------------------------------------------|---------------------------------------------------------------------|--------------------------------------------------------------|
+| **Hampel Filter**                      | 0 or 1       | Outlier presence (per point)                               | “Is this point an outlier relative to its local window?”            | Detect local outliers/volatility in time series              |
+| **Forecastability (ForeCA)**           | 0 → 1        | Forecastability (1 = highly predictable, 0 = noise)        | “How predictable is this time series?”                              | Assess predictability, seasonality/trend strength            |
+| **ADI / CV**                           | ADI: 1 → ∞   | ADI: Intermittency; CV: Variability                        | “Is this series intermittent or erratic?”                           | Classify demand: smooth, intermittent, erratic, lumpy        |
+| **Sample Entropy (SampEn)**            | 0 → ∞        | Complexity/regularity (low = more regular, high = more complex) | “How complex or irregular is this time series?”                 | Quantify complexity, compare variability patterns            |
+| **Permutation Entropy**                | 0 → ∞          | Ordinal complexity/randomness  (low = more regular, high = more complex)    | “How random or complex is the order of this time series?”           | Detect regime changes, compare ordinal structure             |
+| **Pattern Stability Index**            | 0 → 1        | Pattern regularity (1 = highly regular)                    | “How stable are the patterns in this time series?”                  | Quantify pattern persistence, compare regularity             |
+| **Hurst Exponent**                     | 0 → 1        | Trend persistence/long-term memory                         | “Does the series have persistent trend or mean-revert?”             | Detect long memory, trend, or random walk                    |
+| **Maximum Achievable Accuracy**        | 0 → 1        | Theoretical predictability limit (1 = fully predictable)   | “What is the maximum achievable forecast accuracy for this series?” | Assess model limits, compare series                          |
+| **Maximum Achievable Predictability (Πmax)** | 0 → 1 | Theoretical predictability limit based on permutation entropy | “What is the maximum achievable predictability for this series?” | Compare predictability across series, assess ordinal complexity |
+| **Bollinger Bands**                    | 0 or 1       | Signals breakouts and volatility regimes                   | “Is the value outside the expected volatility range?”               | Identify volatility changes, overbought/oversold zones       |
+| **Relative Strength Index (RSI)**      | 0 → 100      | Relative strength/momentum index                           | “Is the series overbought or oversold?”                             | Detect trend strength, reversal points                       |
