@@ -2,6 +2,7 @@
 
 The `series` module of tinyshift provides quantitative tools for time series analysis, focusing on key features for MLOps, forecasting, and pattern detection. It covers metrics and transformations for volatility, intermittency, seasonality strength, trend, entropy, and complexity.
 
+
 ## Features
 
 ### 1. Outlier Detection & Volatility
@@ -35,13 +36,13 @@ The `series` module of tinyshift provides quantitative tools for time series ana
   Measures permutation entropy, quantifying complexity based on the order of values.  
   **When to use:** To assess the randomness and ordinal complexity of a series, especially useful for pattern analysis and regime change detection.
 
-- **`pattern_stability_index`**  
-  Measures pattern stability based on sample entropy. Values close to 1 indicate high regularity/pattern persistence, values near 0 indicate high randomness.  
-  **When to use:** To quantify the regularity of patterns in time series, useful in biomedical, industrial, and financial applications.
+- **`stability_index`**  
+  Measures temporal stability based on Sample Entropy. Values close to 1 indicate high stability/regularity, values near 0 indicate high variability/complexity.  
+  **When to use:** To quantify the consistency and regularity of values over time, useful in biomedical, industrial, and financial applications where magnitude stability matters.
 
-- **`maximum_achievable_predictability`**  
-  Calculates the Maximum Achievable Predictability (Πmax) of a series, based on normalized permutation entropy. Values close to 1 indicate high predictability (low complexity/randomness), values near 0 indicate low predictability (high complexity/randomness).  
-  **When to use:** To estimate the theoretical predictability limit of a time series, especially useful for comparing series with different order patterns and complexity.
+- **`theoretical_limit`**  
+  Calculates the theoretical upper limit of predictability (Πmax) based on ordinal patterns, using normalized permutation entropy. Values close to 1 indicate highly regular ordinal patterns, values near 0 indicate random ordinal structure.  
+  **When to use:** To estimate the theoretical predictability ceiling based on directional patterns only, serving as a benchmark for forecasting performance regardless of magnitude.
 
 ### 3. Trend & Memory
 
@@ -66,9 +67,8 @@ The `series` module of tinyshift provides quantitative tools for time series ana
 | **ADI / CV**                           | ADI: 1 → ∞   | ADI: Intermittency; CV: Variability                        | “Is this series intermittent or erratic?”                           | Classify demand: smooth, intermittent, erratic, lumpy        |
 | **Sample Entropy (SampEn)**            | 0 → ∞        | Complexity/regularity (low = more regular, high = more complex) | “How complex or irregular is this time series?”                 | Quantify complexity, compare variability patterns            |
 | **Permutation Entropy**                | 0 → ∞          | Ordinal complexity/randomness  (low = more regular, high = more complex)    | “How random or complex is the order of this time series?”           | Detect regime changes, compare ordinal structure             |
-| **Pattern Stability Index**            | 0 → 1        | Pattern regularity (1 = highly regular)                    | “How stable are the patterns in this time series?”                  | Quantify pattern persistence, compare regularity             |
 | **Hurst Exponent**                     | 0 → 1        | Trend persistence/long-term memory                         | “Does the series have persistent trend or mean-revert?”             | Detect long memory, trend, or random walk                    |
-| **Maximum Achievable Accuracy**        | 0 → 1        | Theoretical predictability limit (1 = fully predictable)   | “What is the maximum achievable forecast accuracy for this series?” | Assess model limits, compare series                          |
-| **Maximum Achievable Predictability (Πmax)** | 0 → 1 | Theoretical predictability limit based on permutation entropy | “What is the maximum achievable predictability for this series?” | Compare predictability across series, assess ordinal complexity |
+**Stability Index**                   | 0 → 1        | Temporal stability (1 = highly stable values)              | "How stable and consistent are the values over time?"               | Quantify value consistency, compare magnitude regularity     | 
+| **Theoretical Limit**                  | 0 → 1        | Theoretical predictability ceiling based on ordinal patterns | "What is the maximum predictability based on directional patterns?" | Benchmark forecasting potential, assess ordinal complexity   |Stability Index**                   | 0 → 1        | Temporal stability (1 = highly stable values)              | "How stable and consistent are the values over time?"               | Quantify value consistency, compare magnitude regularity     |
 | **Bollinger Bands**                    | 0 or 1       | Signals breakouts and volatility regimes                   | “Is the value outside the expected volatility range?”               | Identify volatility changes, overbought/oversold zones       |
-| **Relative Strength Index (RSI)**      | 0 → 100      | Relative strength/momentum index                           | “Is the series overbought or oversold?”                             | Detect trend strength, reversal points                       |
+| **Relative Strength Index (RSI)**      | 0 → 100      | Relative strength/momentum index                  juikmn            | “Is the series overbought or oversold?”                             | Detect trend strength, reversal points                       |

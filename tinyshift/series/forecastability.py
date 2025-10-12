@@ -143,6 +143,7 @@ def sample_entropy(
     -----
     - SampEn is less biased than Approximate Entropy (ApEn) and does not count self-matches.
     - Higher SampEn values indicate more complexity and irregularity in the time series.
+    - Employs Chebyshev distance (maximum norm) for pattern comparison
     - The function assumes the input time series is 1-dimensional.
     - The function uses the Chebyshev distance (maximum norm) for comparing sequences.
     - If either A or B is zero, SampEn is undefined and np.nan is returned.
@@ -207,30 +208,42 @@ def sample_entropy(
     return sampen
 
 
-def pattern_stability_index(
+def stability_index(
     X: Union[np.ndarray, List[float]],
     m: int = 1,
     tolerance=None,
 ) -> float:
     """
-    Calculates the Pattern Stability Index based on Sample Entropy (SampEn).
+    Calculates the Stability Index based on Sample Entropy (SampEn).
 
-    The Sample Entropy (hrate) measures the complexity and irregularity of a time series.
-    This metric inverts the entropy to quantify the *regularity* or *predictability*
-    of the series, showing the probability that a similar pattern will persist.
+    This function measures the temporal stability and regularity of a time series by
+    inverting the Sample Entropy. It quantifies how consistent the values and patterns
+    are over time, considering both magnitude and sequential relationships.
 
-    The formula used is 1 / (2 ** hrate).
+    The stability is computed as: 1 / exp(SampEn), where higher values indicate
+    more stable and predictable behavior.
 
-    Args:
-        X (array-like): The time series data (e.g., standardized returns).
-        m (int, optional): The embedding dimension (length of the pattern). Defaults to 1.
-        tolerance (float, optional): The similarity criterion (r). If None, the
-            implementation of sample_entropy will use its default (often 0.2 * std(X)).
+    Parameters
+    ----------
+    X : Union[np.ndarray, List[float]]
+        The time series data (e.g., prices, returns, measurements).
+    m : int, optional, default=1
+        The embedding dimension (length of sequences to compare).
+    tolerance : float, optional, default=None
+        The similarity criterion for matching patterns. If None, defaults to 0.2 * std(X).
 
-    Returns:
-        float: The Pattern Stability Index.
-               - A value close to 1 indicates HIGH stability/regularity (highly predictable patterns).
-               - A value close to 0 indicates LOW stability/regularity (highly random/complex series).
+    Returns
+    -------
+    float
+        The Stability Index, where:
+        - Values close to 1: High stability/regularity (consistent patterns)
+        - Values close to 0: Low stability/regularity (irregular/complex behavior)
+
+    Notes
+    -----
+    - Uses Sample Entropy which considers actual value magnitudes and distances
+    - Higher tolerance allows more variation in "similar" patterns
+    - Complementary to ordinal-based measures like theoretical_limit()
     """
     hrate = sample_entropy(X, m=m, tolerance=tolerance)
     return 1 / np.exp(hrate)
@@ -290,28 +303,52 @@ def permutation_entropy(
     return pe / np.log2(math.factorial(m)) if normalize else pe
 
 
-def maximum_achievable_predictability(
+def theoretical_limit(
     X: Union[np.ndarray, List[float]],
     m: int = 3,
     delay: int = 1,
 ) -> float:
     """
-    Calculates the Maximum Achievable Predictability (Πmax) based on the theoretical limit:
-    Πmax = 1 - normalized Permutation Entropy (PE).
-    Πmax ranges from 0 (completely unpredictable) to 1 (perfectly predictable).
+    Calculates the theoretical upper limit of predictability (Πmax) for a time series based on ordinal patterns.
 
-    Parameters:
-        X (array-like): The time series data (e.g., closing prices).
-        m (int, optional): The embedding dimension (length of the pattern). Defaults to 3.
-        delay (int, optional): The time delay (spacing between elements in the pattern). Defaults to 1.
-    Returns:
-        float: The Maximum Achievable Predictability (Πmax).
+    This function computes the maximum achievable predictability by analyzing the structural
+    complexity of ordinal patterns in the time series, independent of magnitude. It uses
+    normalized Permutation Entropy: Πmax = 1 - PE_norm.
+
+    The theoretical limit represents the upper bound of predictability that any forecasting
+    method could achieve if it perfectly captured all ordinal patterns in the data, ignoring
+    actual value magnitudes.
+
+    Parameters
+    ----------
+    X : Union[np.ndarray, List[float]]
+        The time series data.
+    m : int, optional, default=3
+        The embedding dimension (length of ordinal patterns to analyze).
+    delay : int, optional, default=1
+        The delay (spacing between elements in patterns).
+
+    Returns
+    -------
+    float
+        The theoretical predictability limit (Πmax) for the time series, ranging from 0 to 1:
+        - 0: Completely random ordinal patterns (maximum complexity)
+        - 1: Perfectly regular ordinal patterns (minimum complexity)
 
     Notes
     -----
-    - The function assumes the input time series is 1-dimensional.
-    - Higher Πmax values indicate more predictable patterns in the time series.
-    - The function uses the Permutation Entropy as a measure of complexity.
+    - This is a **theoretical upper bound** based solely on ordinal structure of the series
+    - The measure ignores magnitudes, focusing only on directional patterns
+    - Higher values indicate more regular/predictable ordinal behavior
+    - Serves as a benchmark for comparing actual forecasting performance
+    - Based on Permutation Entropy theory and information-theoretic limits
+
+    References
+    ----------
+    [1] Bandt, C., & Pompe, B. (2002). Permutation entropy: a natural complexity
+        measure for time series. Physical review letters, 88(17), 174102.
+    [2] Song, C., Qu, Z., Blumm, N., & Barabási, A. L. (2010). Limits of
+        predictability in human mobility. Science, 327(5968), 1018-1021.
     """
     pe = permutation_entropy(X, m=m, delay=delay, normalize=True)
 
