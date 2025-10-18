@@ -11,6 +11,7 @@ import math
 
 def hurst_exponent(
     X: Union[np.ndarray, List[float]],
+    d: int = 1,
 ) -> Tuple[float, float]:
     """
     Calculate the Hurst exponent using a rescaled range (R/S) analysis approach with p-value for random walk hypothesis.
@@ -24,6 +25,9 @@ def hurst_exponent(
     X : Union[np.ndarray, List[float]]
         Input 1D time series data for which to calculate the Hurst exponent.
         Must contain at least 30 samples.
+    d : int, default=1
+        The order of differencing to apply to the time series before analysis.
+        Can be 0 (no differencing), 1 (first difference), or 2 (second difference).
 
     Returns
     -------
@@ -44,9 +48,18 @@ def hurst_exponent(
         If input data has less than 30 samples (insufficient for reliable estimation).
     TypeError
         If input is not a list or numpy array.
+
+    Notes
+    -----
+    - The method uses differencing of order `d` to remove trends/non-stationarities.
+    - The R/S analysis is performed over multiple window sizes to estimate the Hurst exponent.
+    - A hypothesis test is conducted to assess if the estimated Hurst exponent significantly differs from 0.5 (random walk).
     """
+    if d not in [0, 1, 2]:
+        raise ValueError("Differencing order 'd' must be either 0, 1, or 2")
+
     X = np.asarray(X, dtype=np.float64)
-    deltas = np.diff(X)
+    deltas = np.diff(X, n=d)
     size = len(deltas)
 
     if 30 > len(X):
@@ -149,7 +162,11 @@ def relative_strength_index(
     return rsi
 
 
-def standardize_returns(X, log=True, standardize=True) -> np.ndarray:
+def standardize_returns(
+    X: Union[np.ndarray, List[float]],
+    log: bool = True,
+    standardize: bool = True,
+) -> np.ndarray:
     """
     Calculates and normalizes the returns of a time series.
 
@@ -185,3 +202,61 @@ def standardize_returns(X, log=True, standardize=True) -> np.ndarray:
     ratios = X[1:] / X[:-1]
     returns = np.log(ratios) if log else ratios - 1
     return (returns - np.mean(returns)) / np.std(returns) if standardize else returns
+
+
+def trend_significance(
+    X: Union[np.ndarray, List[float]],
+) -> Tuple[float, float]:
+    """
+    Performs a linear regression against time (index) to check for a significant
+    linear trend in the input data.
+
+    The function calculates the R-squared value and the p-value of the
+    hypothesis test where the null hypothesis is that the slope of the
+    regression line is zero (i.e., no linear trend).
+
+    Parameters
+    ----------
+    X : Union[np.ndarray, List[float]]
+        One-dimensional array or time series data (e.g., a numpy array or list).
+
+    Returns
+    -------
+    Tuple[float, float]
+        (R-squared, p-value)
+        r_squared : float
+            The coefficient of determination (R²), representing the proportion
+            of variance in the data explained by the linear trend.
+        p_value : float
+            The two-sided p-value for a hypothesis test whose null hypothesis is
+            that the slope of the regression line is zero.
+
+    Raises
+    ------
+    ValueError
+        If the input data is not 1-dimensional.
+
+    Notes
+    -----
+    A 'significant' linear trend for detrending purposes is typically considered
+    when:
+    1. R² is high enough (e.g., > 0.1), suggesting a non-trivial variance
+       explained.
+    2. p-value is low enough (e.g., < 0.05), indicating the slope is
+       statistically different from zero.
+
+    The initial criteria described in the code comments are:
+    - R² > 0.1 (10% of variance explained)
+    - p-value < 0.05 (statistically significant trend)
+    """
+
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    time_index = np.arange(len(X))
+    _, _, r_value, p_value, _ = scipy.stats.linregress(time_index, X)
+    r_squared = r_value**2
+
+    return r_squared, p_value
