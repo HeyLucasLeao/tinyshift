@@ -8,6 +8,8 @@ import numpy as np
 from scipy.signal import periodogram
 from collections import Counter
 import math
+from .stats import trend_significance
+from scipy import signal
 
 
 def foreca(
@@ -116,6 +118,7 @@ def sample_entropy(
     X: Union[np.ndarray, List[float]],
     m: int = 1,
     tolerance: float = None,
+    detrend: bool = False,
 ) -> np.ndarray:
     """
     Compute the Sample Entropy (SampEn) of a 1D time series.
@@ -153,6 +156,13 @@ def sample_entropy(
 
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
+
+    if detrend:
+        r_squared, p_value = trend_significance(X)
+        if r_squared > 0.3 and p_value < 0.05:
+            X = signal.detrend(X, type="linear")
+        else:
+            X = signal.detrend(X, type="constant")
 
     n = X.shape[0]
 
@@ -212,9 +222,10 @@ def stability_index(
     X: Union[np.ndarray, List[float]],
     m: int = 1,
     tolerance=None,
+    detrend: bool = False,
 ) -> float:
     """
-    Calculates the Stability Index based on Sample Entropy (SampEn).
+    Calculate the Stability Index based on Sample Entropy (SampEn).
 
     This function measures the temporal stability and regularity of a time series by
     inverting the Sample Entropy. It quantifies how consistent the values and patterns
@@ -231,6 +242,8 @@ def stability_index(
         The embedding dimension (length of sequences to compare).
     tolerance : float, optional, default=None
         The similarity criterion for matching patterns. If None, defaults to 0.2 * std(X).
+    detrend : bool, optional, default=False
+        Whether to detrend the series before calculating entropy.
 
     Returns
     -------
@@ -245,7 +258,7 @@ def stability_index(
     - Higher tolerance allows more variation in "similar" patterns
     - Complementary to ordinal-based measures like theoretical_limit()
     """
-    hrate = sample_entropy(X, m=m, tolerance=tolerance)
+    hrate = sample_entropy(X, m=m, tolerance=tolerance, detrend=detrend)
     return 1 / np.exp(hrate)
 
 
