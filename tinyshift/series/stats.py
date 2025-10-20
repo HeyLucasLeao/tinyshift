@@ -7,6 +7,7 @@ from typing import Union, Tuple, List
 import numpy as np
 import scipy
 import math
+import pandas as pd
 
 
 def hurst_exponent(
@@ -260,3 +261,68 @@ def trend_significance(
     r_squared = r_value**2
 
     return r_squared, p_value
+
+
+def fourier_seasonality(
+    df: pd.DataFrame,
+    time_col: str,
+    seasonality: List[str],
+):
+    """
+    Adds Fourier-based seasonal features to the dataframe.
+
+    Parameters
+    -----------
+    df : pandas.DataFrame
+        Input dataframe with time column
+    time_col : str
+        Name of the datetime column
+    seasonalities : list, optional
+        List of seasonalities to include. Options:
+        ['daily', 'weekly', 'monthly', 'quarterly', 'yearly']
+        Default: ['weekly', 'yearly']
+
+    Returns
+    --------
+    pandas.DataFrame
+        DataFrame with added Fourier seasonal features
+
+    """
+    df = df.copy()
+
+    seasonality_config = {
+        "daily": {"period": 24, "value_func": lambda dt: dt.hour, "name": "daily"},
+        "weekly": {
+            "period": 7,
+            "value_func": lambda dt: dt.dayofweek,
+            "name": "weekly",
+        },
+        "monthly": {"period": 12, "value_func": lambda dt: dt.month, "name": "monthly"},
+        "quarterly": {
+            "period": 4,
+            "value_func": lambda dt: dt.quarter,
+            "name": "quarterly",
+        },
+        "yearly": {
+            "period": 365,
+            "value_func": lambda dt: dt.dayofyear,
+            "name": "yearly",
+        },
+    }
+
+    for season in seasonality:
+        if season not in seasonality_config:
+            raise ValueError(
+                f"Unknown seasonality: {season}. "
+                f"Available options: {list(seasonality_config.keys())}"
+            )
+
+        config = seasonality_config[season]
+        period = config["period"]
+        values = config["value_func"](df[time_col].dt)
+        name = config["name"]
+
+        df[f"{name}_sin"] = np.sin(2 * np.pi * values / period)
+        df[f"{name}_cos"] = np.cos(2 * np.pi * values / period)
+
+    return df
