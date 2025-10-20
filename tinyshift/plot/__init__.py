@@ -3,4 +3,5 @@
 # Licensed under the MIT License
 
 
-from .correlation import corr_barplot, corr_heatmap
+from .correlation import *
+from .ts_diagnostics import *
