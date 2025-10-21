@@ -4,7 +4,6 @@
 
 
 from statsmodels.stats.diagnostic import acorr_ljungbox
-from statsmodels.tsa import seasonal
 from statsmodels.tsa.stattools import adfuller, acf, pacf
 from tinyshift.series import trend_significance
 import plotly.subplots as sp
@@ -13,54 +12,48 @@ import plotly.graph_objs as go
 import numpy as np
 from typing import Union, List, Optional
 import pandas as pd
+from statsmodels.tsa.seasonal import MSTL
 
 
 def seasonal_decompose(
     X: Union[np.ndarray, List[float], pd.Series],
-    model: str = "additive",
-    filt: Optional[np.ndarray] = None,
-    period: int = None,
-    two_sided: bool = True,
-    extrapolate_trend: int = 0,
+    periods: int | List[int],
+    ljung_lags: int = 10,
     height: int = 1200,
     width: int = 1300,
-    ljung_lags: int = 10,
     fig_type: Optional[str] = None,
 ):
     """
-    Performs seasonal decomposition of a time series and plots the components.
+    Performs seasonal decomposition of a time series using MSTL and plots the components.
 
-    This function uses the `seasonal_decompose` method from statsmodels to separate the
-    time series into observed, trend, seasonal, and residual components.
-    Additionally, it calculates trend significance and the Ljung-Box test for
-    residuals, displaying a summary in the plot.
+    This function uses the MSTL (Multiple Seasonal-Trend decomposition using Loess) method
+    from statsmodels to separate a time series into trend, seasonal, and residual components
+    for a specific identifier. It calculates trend significance and performs the Ljung-Box
+    test for residuals, displaying a summary in the plot.
 
     Parameters
     ----------
-    X : array-like
-        The time series to be decomposed. Expected to be an object with an index
-        (e.g., pandas Series).
-    model : {"additive", "multiplicative"}, default="additive"
-        Type of seasonal model. If "additive", $X = T + S + R$. If
-        "multiplicative", $X = T \cdot S \cdot R$.
-    filt : array-like, optional
-        Moving average filter for calculating the trend component. By default,
-        a symmetric filter is used.
-    period : int, optional
-        Period of the series (number of observations per cycle). If `None` and `X` is
-        a pandas Series, the period is inferred from the index frequency.
-    two_sided : bool, default=True
-        If `True` (default), uses a centered moving average filter. If `False`, uses
-        a causal filter (future only).
-    extrapolate_trend : int or str, default=0
-        Number of points at the beginning and end to extrapolate the trend. If 0 (default),
-        the trend is `NaN` at these extremes.
+    df : pandas.DataFrame
+        Input DataFrame containing the time series data with columns for time,
+        target values, and identifiers.
+    periods : int or list of int
+        Period(s) of the seasonal components. For multiple seasonality, provide
+        a list of integers (e.g., [7, 365] for weekly and yearly patterns).
+    identifier : str
+        Unique identifier value to filter the DataFrame for decomposition.
+        Must exist in the `id_col` column.
+    time_col : str, default='ds'
+        Name of the column containing time/date values.
+    target_col : str, default='y'
+        Name of the column containing the target variable to decompose.
+    id_col : str, default='unique_id'
+        Name of the column containing unique identifiers.
     height : int, default=1200
         Figure height in pixels.
     width : int, default=1300
         Figure width in pixels.
     ljung_lags : int, default=10
-        The number of lags to be used in the Ljung-Box test for residuals.
+        Number of lags to use in the Ljung-Box test for residual autocorrelation.
     fig_type : str, optional
         Plotly figure output type. Passed to `fig.show()`.
         E.g.: 'json', 'html', 'notebook'.
@@ -71,55 +64,70 @@ def seasonal_decompose(
         Returns the Plotly Figure object if `fig_type` is `None` or the result
         of the `fig.show(fig_type)` call.
 
+    Raises
+    ------
+    TypeError
+        If input is not a pandas DataFrame.
+    ValueError
+        If identifier is None or not found in the DataFrame.
+
     Notes
     -----
-    The resulting plot is a Plotly `make_subplots` with 5 subplots:
-    - Observed
-    - Trend
-    - Seasonal
-    - Residuals
-    - Summary (includes trend significance - $R^2$ and p-value - and the
-      Ljung-Box test for residual autocorrelation).
+    The resulting plot contains subplots for each decomposition component plus a summary:
+    - Each component from the MSTL decomposition (trend, seasonal patterns, residuals)
+    - Summary panel showing trend significance (R² and p-value) and Ljung-Box test
+      results for residual autocorrelation analysis.
+
+    The MSTL method is particularly useful for time series with multiple seasonal patterns
+    and provides robust decomposition even in the presence of outliers.
     """
+
+    def convert_to_dataframe(result: MSTL) -> pd.Series:
+        """
+        Reconstructs the original time series from its MSTL decomposition components.
+
+        Parameters
+        ----------
+        result : MSTL
+            Fitted MSTL object containing the decomposition components.
+
+        Returns
+        -------
+        pandas.Series
+            Reconstructed time series obtained by summing the trend, seasonal, and residual components.
+        """
+        df = pd.DataFrame()
+        df["data"] = result.observed
+        df["trend"] = result.trend
+        if isinstance(result.seasonal, pd.Series):
+            df["seasonal"] = result.seasonal
+        else:
+            for seasonal_col in result.seasonal.columns:
+                df[seasonal_col] = result.seasonal[seasonal_col]
+        df["resid"] = result.resid
+
+        return df
 
     index = X.index if hasattr(X, "index") else list(range(len(X)))
 
-    if X.ndim != 1:
-        raise ValueError("Input data must be 1-dimensional")
+    if not isinstance(X, pd.Series):
+        X = pd.Series(np.asarray(X, dtype=np.float64))
 
     colors = px.colors.qualitative.T10
     num_colors = len(colors)
 
-    result = seasonal.seasonal_decompose(
-        X,
-        model=model,
-        filt=filt,
-        period=period,
-        two_sided=two_sided,
-        extrapolate_trend=extrapolate_trend,
-    )
-    fig = sp.make_subplots(
-        rows=5,
-        cols=1,
-        subplot_titles=[
-            "Observed",
-            "Trend",
-            "Seasonal",
-            "Residuals",
-            "Summary",
-        ],
-        row_heights=[4, 4, 4, 4, 1],
-    )
-
+    result = MSTL(X, periods=periods).fit()
+    result = convert_to_dataframe(result)
     r_squared, p_value = trend_significance(X)
     trend_results = f"R²={r_squared:.4f}, p={p_value:.4f}"
-    resid = result.resid[~np.isnan(result.resid)]
-    ljung_box = acorr_ljungbox(resid, lags=[ljung_lags])
+    ljung_box = acorr_ljungbox(result.resid, lags=[ljung_lags])
+
     ljung_stat, p_value = (
         ljung_box["lb_stat"].values[0],
         ljung_box["lb_pvalue"].values[0],
     )
     ljung_box = f"Stats={ljung_stat:.4f}, p={p_value:.4f}"
+
     summary = "<br>".join(
         [
             f"<b>{k}</b>: {v}"
@@ -130,7 +138,18 @@ def seasonal_decompose(
         ]
     )
 
-    for i, col in enumerate(["observed", "trend", "seasonal", "resid"]):
+    subplot_titles = []
+    for col in result.columns:
+        subplot_titles.extend([f"{col.capitalize()}"])
+    subplot_titles.extend(["Summary"])
+
+    fig = sp.make_subplots(
+        rows=len(subplot_titles),
+        cols=1,
+        subplot_titles=subplot_titles,
+    )
+
+    for i, col in enumerate(result.columns):
         color = colors[(i - 1) % num_colors]
         fig.add_trace(
             go.Scatter(
@@ -146,12 +165,14 @@ def seasonal_decompose(
 
     fig.add_trace(
         go.Scatter(x=[0], y=[0], text=[summary], mode="text", showlegend=False),
-        row=5,
+        row=subplot_titles.index("Summary") + 1,
         col=1,
     )
 
-    fig.update_xaxes(visible=False, row=5, col=1)
-    fig.update_yaxes(visible=False, row=5, col=1)
+    fig.update_xaxes(visible=False, row=subplot_titles.index("Summary") + 1, col=1)
+    fig.update_yaxes(visible=False, row=subplot_titles.index("Summary") + 1, col=1)
+
+    color = colors[(i - 1) % num_colors]
 
     fig.update_layout(
         title="Seasonal Decomposition",
