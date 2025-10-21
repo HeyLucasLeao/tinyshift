@@ -202,7 +202,8 @@ def standardize_returns(
 
     ratios = X[1:] / X[:-1]
     returns = np.log(ratios) if log else ratios - 1
-    return (returns - np.mean(returns)) / np.std(returns) if standardize else returns
+    returns = (returns - np.mean(returns)) / np.std(returns) if standardize else returns
+    return np.concatenate([[np.nan], returns])
 
 
 def trend_significance(
