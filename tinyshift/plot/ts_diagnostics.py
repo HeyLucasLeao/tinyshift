@@ -112,7 +112,7 @@ def seasonal_decompose(
         return df
 
     index = X.index if hasattr(X, "index") else list(range(len(X)))
-    nlags = min(10, len(X) // 5)
+    nlags = min(nlags, len(X) // 5)
 
     if not isinstance(X, pd.Series):
         X = pd.Series(np.asarray(X, dtype=np.float64))
