@@ -20,7 +20,7 @@ from statsmodels.stats.diagnostic import het_arch
 def seasonal_decompose(
     X: Union[np.ndarray, List[float], pd.Series],
     periods: int | List[int],
-    ljung_lags: int = 10,
+    nlags: int = 10,
     height: int = 1200,
     width: int = 1300,
     fig_type: Optional[str] = None,
@@ -54,8 +54,9 @@ def seasonal_decompose(
         Figure height in pixels.
     width : int, default=1300
         Figure width in pixels.
-    ljung_lags : int, default=10
+    nlags : int, default=10
         Number of lags to use in the Ljung-Box test for residual autocorrelation.
+        Default is set to 10 or 1/5th of the length of the series, whichever is smaller. (Rob J Hyndman rule of thumb for lag selection non-seasonal time series.)
     fig_type : str, optional
         Plotly figure output type. Passed to `fig.show()`.
         E.g.: 'json', 'html', 'notebook'.
@@ -111,6 +112,7 @@ def seasonal_decompose(
         return df
 
     index = X.index if hasattr(X, "index") else list(range(len(X)))
+    nlags = min(10, len(X) // 5)
 
     if not isinstance(X, pd.Series):
         X = pd.Series(np.asarray(X, dtype=np.float64))
@@ -122,7 +124,7 @@ def seasonal_decompose(
     result = convert_to_dataframe(result)
     r_squared, p_value = trend_significance(X)
     trend_results = f"R²={r_squared:.4f}, p={p_value:.4f}"
-    ljung_box = acorr_ljungbox(result.resid, lags=[ljung_lags])
+    ljung_box = acorr_ljungbox(result.resid, lags=[nlags])
 
     ljung_stat, p_value = (
         ljung_box["lb_stat"].values[0],
