@@ -14,6 +14,7 @@ from typing import Union, List, Optional
 import pandas as pd
 from statsmodels.tsa.seasonal import MSTL
 import scipy.stats
+from statsmodels.stats.diagnostic import het_arch
 
 
 def seasonal_decompose(
@@ -214,6 +215,7 @@ def stationarity_check(
         Figure width in pixels.
     nlags : int, default=30
         Number of lags to include in ACF and PACF calculations.
+        Default is 30 or half the length of the series, whichever is smaller.
     fig_type : str, optional
         Plotly figure output type. Passed to `fig.show()`.
         E.g.: 'json', 'html', 'notebook'.
@@ -228,6 +230,7 @@ def stationarity_check(
     -----
     Confidence bands are shown on ACF and PACF plots at ±1.96/√N level.
     """
+    nlags = min(nlags, (len(df) // 2) - 1)
 
     if isinstance(df, pd.Series):
         series_name = df.name if df.name is not None else "Value"
@@ -296,7 +299,7 @@ def stationarity_check(
     for i, var in enumerate(df.columns, start=1):
         X = df[var].dropna()
         adf_stat, p_value = adfuller(X)[:2]
-        adf_results[var] = f"ADF={adf_stat:.4f}, p={p_value:.4f}"
+        adf_results[var] = f"ADF={adf_stat:.2f}, p={p_value:.4f}"
         color = colors[(i - 1) % num_colors]
 
         fig.add_trace(
@@ -366,7 +369,7 @@ def residual_check(
     df: Union[pd.DataFrame, pd.Series],
     height: int = 1200,
     width: int = 1300,
-    nlags: int = 30,
+    nlags: int = 10,
     fig_type: Optional[str] = None,
 ):
     """
@@ -387,8 +390,9 @@ def residual_check(
         Figure height in pixels.
     width : int, default=1300
         Figure width in pixels.
-    nlags : int, default=30
-        Number of lags to use in the Ljung-Box test for residual autocorrelation.
+    nlags : int, default=10
+        Number of lags to use in the Ljung-Box test for residual autocorrelation and ARCH test for heteroscedasticity.
+        Default is set to 10 or 1/5th of the length of the series, whichever is smaller. (Rob J Hyndman rule of thumb for lag selection non-seasonal time series.)
     fig_type : str, optional
         Plotly figure output type. Passed to `fig.show()`.
         E.g.: 'json', 'html', 'notebook'.
@@ -403,6 +407,8 @@ def residual_check(
     -----
     Confidence bands are shown on ACF and PACF plots at ±1.96/√N level.
     """
+    nlags = min(10, len(df) // 5)
+
     if isinstance(df, pd.Series):
         series_name = df.name if df.name is not None else "Value"
         df = df.to_frame(name=series_name)
@@ -421,16 +427,19 @@ def residual_check(
         subplot_titles.extend(
             [f"Series ({var})", f"Histogram ({var})", f"QQ-Plot ({var})"]
         )
-    subplot_titles.extend(["Ljung-Box Results Summary", "", ""])
+    subplot_titles.extend(["Ljung-Box Results Summary", "ARCH Results Summary", ""])
 
     fig = sp.make_subplots(rows=N + 1, cols=3, subplot_titles=subplot_titles)
 
     ljung_box_results = {}
+    arch_results = {}
 
     for i, var in enumerate(df.columns, start=1):
         X = df[var].dropna()
         lb_stat, p_value = acorr_ljungbox(X, lags=[nlags], return_df=True).iloc[0]
-        ljung_box_results[var] = f"Ljung-Box={lb_stat:.2f}, p={p_value:.4f}"
+        ljung_box_results[var] = f"LB={lb_stat:.2f}, p={p_value:.4f}"
+        arch_stat, p_value = het_arch(X, nlags=nlags)[:2]
+        arch_results[var] = f"ARCH={arch_stat:.2f}, p={p_value:.4f}"
         color = colors[(i - 1) % num_colors]
 
         fig.add_trace(
@@ -489,6 +498,9 @@ def residual_check(
     ljung_box_text = "<br>".join(
         [f"<b>{k}</b>: {v}" for k, v in ljung_box_results.items()]
     )
+    arch_results_text = "<br>".join(
+        [f"<b>{k}</b>: {v}" for k, v in arch_results.items()]
+    )
 
     fig.add_trace(
         go.Scatter(
@@ -504,6 +516,20 @@ def residual_check(
         col=1,
     )
 
+    fig.add_trace(
+        go.Scatter(
+            x=[0],
+            y=[0],
+            text=[arch_results_text],
+            mode="text",
+            showlegend=False,
+            name="Summary",
+            hoverinfo="skip",
+        ),
+        row=N + 1,
+        col=2,
+    )
+
     for row in range(1, N + 1):
         fig.update_xaxes(title_text="Index", row=row, col=1)
         fig.update_yaxes(title_text="Value", row=row, col=1)
@@ -514,6 +540,8 @@ def residual_check(
 
     fig.update_xaxes(visible=False, row=N + 1, col=1)
     fig.update_yaxes(visible=False, row=N + 1, col=1)
+    fig.update_xaxes(visible=False, row=N + 1, col=2)
+    fig.update_yaxes(visible=False, row=N + 1, col=2)
 
     fig.update_layout(
         title="Histogram/QQ-Plot with Ljung-Box Summary",
