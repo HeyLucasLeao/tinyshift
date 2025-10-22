@@ -409,7 +409,7 @@ def residual_check(
     -----
     Confidence bands are shown on ACF and PACF plots at ±1.96/√N level.
     """
-    nlags = min(10, len(df) // 5)
+    nlags = min(nlags, len(df) // 5)
 
     if isinstance(df, pd.Series):
         series_name = df.name if df.name is not None else "Value"
@@ -429,7 +429,7 @@ def residual_check(
         subplot_titles.extend(
             [f"Series ({var})", f"Histogram ({var})", f"QQ-Plot ({var})"]
         )
-    subplot_titles.extend(["Ljung-Box Results Summary", "ARCH Results Summary", ""])
+    subplot_titles.extend(["Ljung-Box Results Summary", "LM-ARCH Results Summary", ""])
 
     fig = sp.make_subplots(rows=N + 1, cols=3, subplot_titles=subplot_titles)
 
@@ -546,7 +546,7 @@ def residual_check(
     fig.update_yaxes(visible=False, row=N + 1, col=2)
 
     fig.update_layout(
-        title="Histogram/QQ-Plot with Ljung-Box Summary",
+        title="Histogram/QQ-Plot with Ljung-Box & LM-ARCH Summary",
         height=height,
         width=width,
         showlegend=False,
