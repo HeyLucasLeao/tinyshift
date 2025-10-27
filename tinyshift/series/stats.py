@@ -327,3 +327,31 @@ def fourier_seasonality(
         df[f"{name}_cos"] = np.cos(2 * np.pi * values / period)
 
     return df
+
+
+def estimate_history_length(seasonal_period: int, horizon: int) -> int:
+    """
+    Estimates a heuristic lag value (history window size) based on the seasonal
+    period and the forecast horizon.
+
+    This heuristic is commonly used in time series modeling
+    to ensure the model's regressor includes enough historical data to capture
+    the full seasonal cycle and the entire prediction range.
+
+    The calculation follows the rule-of-thumb: L = 1.25 * max(S, H).
+
+    Parameters
+    ----------
+    seasonal_period : int
+        The known seasonal period (S) of the time series (e.g., 7 for weekly data, 365 for daily/yearly data).
+
+    horizon : int
+        The desired forecast horizon (H) in the same units as the seasonal period.
+
+    Returns
+    -------
+    int
+        The suggested historical lag value (L). It is implicitly an integer as lag values are typically discrete.
+    """
+
+    return int(1.25 * np.max([seasonal_period, horizon]))
