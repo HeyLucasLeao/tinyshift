@@ -580,8 +580,10 @@ def pami(
     ----------
     X : np.ndarray, list of float, or pd.Series
         Time series data to analyze.
-    nlags : int, default=30
-        Maximum lag to compute PAMI. Must be positive.
+    nlags : int, default=10
+        Maximum lag to compute PAMI.
+        Default is 30 or half the length of the series, whichever is smaller.
+
     m : int, default=3
         Embedding dimension for permutation patterns. Typically between 3-7.
     delay : int, default=1
@@ -613,6 +615,7 @@ def pami(
     underlying dynamical system and can be used for lag selection in forecasting
     or embedding dimension analysis.
     """
+    nlags = min(nlags, (len(X) // 2) - 1)
     lags = np.arange(1, nlags + 1)
     pami_values = np.array(
         [
