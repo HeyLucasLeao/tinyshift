@@ -15,6 +15,9 @@ import pandas as pd
 from statsmodels.tsa.seasonal import MSTL
 import scipy.stats
 from statsmodels.stats.diagnostic import het_arch
+import plotly.graph_objects as go
+from scipy.signal import argrelextrema
+from tinyshift.series import permutation_auto_mutual_information
 
 
 def seasonal_decompose(
@@ -552,4 +555,113 @@ def residual_check(
         showlegend=False,
     )
 
+    return fig.show(fig_type)
+
+
+def pami(
+    X: Union[np.ndarray, List[float], pd.Series],
+    nlags: int = 30,
+    m: int = 3,
+    delay: int = 1,
+    normalize: bool = False,
+    fig_type: Optional[str] = None,
+    height: int = 600,
+    width: int = 800,
+):
+    """
+    Plots the Permutation Auto-Mutual Information (PAMI) for lags from 1 to nlags.
+
+    This function calculates and visualizes the PAMI values across different time lags
+    to help identify optimal lag values for time series analysis. PAMI measures the
+    mutual information between a time series and its lagged versions using permutation
+    patterns, which is useful for nonlinear time series analysis.
+
+    Parameters
+    ----------
+    X : np.ndarray, list of float, or pd.Series
+        Time series data to analyze.
+    nlags : int, default=30
+        Maximum lag to compute PAMI. Must be positive.
+    m : int, default=3
+        Embedding dimension for permutation patterns. Typically between 3-7.
+    delay : int, default=1
+        Embedding delay for time series reconstruction.
+    normalize : bool, default=False
+        Whether to normalize PAMI values to [0,1] range.
+    fig_type : str, optional
+        Plotly figure output type. Passed to `fig.show()`.
+        E.g.: 'json', 'html', 'notebook'.
+    height : int, default=600
+        Figure height in pixels.
+    width : int, default=800
+        Figure width in pixels.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure or None
+        Returns the Plotly Figure object if `fig_type` is `None` or the result
+        of the `fig.show(fig_type)` call.
+
+    Notes
+    -----
+    The plot includes:
+    - Bar chart showing PAMI values for each lag
+    - Confidence band at ±1.96/√N level (gray dashed line)
+    - Local minima markers (red circles) indicating potential optimal lags
+
+    Local minima in PAMI often correspond to meaningful time delays in the
+    underlying dynamical system and can be used for lag selection in forecasting
+    or embedding dimension analysis.
+    """
+    lags = np.arange(1, nlags + 1)
+    pami_values = np.array(
+        [
+            permutation_auto_mutual_information(
+                X, tau=lag, m=m, delay=delay, normalize=normalize
+            )
+            for lag in lags
+        ]
+    )
+    local_minimum = argrelextrema(pami_values, np.less)[0]
+    offset = 0.01 * np.max(pami_values)
+
+    min_lag = lags[local_minimum]
+    min_value = pami_values[local_minimum]
+    N = len(X)
+    conf = 1.96 / np.sqrt(N)
+
+    pami_bar = go.Bar(
+        x=lags,
+        y=pami_values,
+        marker_color="#1f77b4",
+        name="PAMI",
+    )
+    band_upper = go.Scatter(
+        x=lags,
+        y=[conf] * len(lags),
+        mode="lines",
+        line=dict(color="#949494", dash="dash"),
+        showlegend=False,
+        name="Confidence Band",
+        hoverinfo="skip",
+    )
+    min_marker = go.Scatter(
+        x=min_lag,
+        y=min_value + offset,
+        mode="markers",
+        marker=dict(color="#d62728", size=4, symbol="circle"),
+        name="Local Minimum",
+        hoverinfo="skip",
+        showlegend=True,
+    )
+
+    fig = go.Figure([pami_bar, band_upper, min_marker])
+    fig.update_layout(
+        title=f"Permutation Auto-Mutual Information (PAMI) by Lag",
+        xaxis_title="Lag",
+        yaxis_title="PAMI",
+        hovermode="x",
+        height=height,
+        width=width,
+    )
     return fig.show(fig_type)
