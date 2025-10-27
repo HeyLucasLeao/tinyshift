@@ -625,11 +625,11 @@ def pami(
             for lag in lags
         ]
     )
-    local_minimum = argrelextrema(pami_values, np.less)[0]
+    local_minima = argrelextrema(pami_values, np.less)[0]
     offset = 0.01 * np.max(pami_values)
 
-    min_lag = lags[local_minimum]
-    min_value = pami_values[local_minimum]
+    min_lag = lags[local_minima]
+    min_value = pami_values[local_minima]
     N = len(X)
     conf = 1.96 / np.sqrt(N)
 
@@ -653,7 +653,7 @@ def pami(
         y=min_value + offset,
         mode="markers",
         marker=dict(color="#d62728", size=4, symbol="circle"),
-        name="Local Minimum",
+        name="Local Minima",
         hoverinfo="skip",
         showlegend=True,
     )
