@@ -70,29 +70,28 @@ def hampel_filter(
 
     if rolling_window < 3:
         raise ValueError("rolling_window must be >= 3")
-    if rolling_window % 2 == 0:
-        raise ValueError("rolling_window must be odd")
 
     X = np.asarray(X, dtype=np.float64)
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
 
-    is_outlier = np.zeros(X.shape[0], dtype=bool)
-    half_window = rolling_window // 2
-    center_indices = range(half_window, X.shape[0] - half_window)
+    n_samples = X.shape[0]
+    is_outlier = np.zeros(n_samples, dtype=bool)
 
-    window_indices = [
-        np.arange(i - half_window, i + half_window + 1) for i in center_indices
-    ]
+    start_index = rolling_window - 1
+    center_indices = np.arange(start_index, n_samples)
+    offsets = np.arange(-rolling_window + 1, 1)
+    window_indices = center_indices[:, None] + offsets[None, :]
+
+    if window_indices.shape[0] == 0:
+        return is_outlier
+
     windows = X[window_indices]
 
     medians = np.median(windows, axis=1)
     mads = np.median(np.abs(windows - medians[:, None]), axis=1)
     thresholds = factor * mads * scale
-
-    for i, idx in enumerate(center_indices):
-        if abs(X[idx] - medians[i]) > thresholds[i]:
-            is_outlier[idx] = True
+    is_outlier[center_indices] = np.abs(X[center_indices] - medians) > thresholds
 
     return is_outlier
 
