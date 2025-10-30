@@ -57,7 +57,7 @@ class RobustGaussianScaler(BaseEstimator, TransformerMixin):
         X: np.ndarray,
         winsorize_method: str = "stddev",
         power_method: str = "yeo-johnson",
-    ) -> "RobustNormalScaler":
+    ) -> "RobustGaussianScaler":
         """Compute the winsorization bounds, power transform and scaling parameters.
 
         Parameters

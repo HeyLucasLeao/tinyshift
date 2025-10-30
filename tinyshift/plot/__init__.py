@@ -4,4 +4,4 @@
 
 
 from .correlation import *
-from .ts_diagnostics import *
+from .diagnostic import *
