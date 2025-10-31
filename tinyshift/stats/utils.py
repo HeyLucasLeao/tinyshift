@@ -52,7 +52,7 @@ def chebyshev_guaranteed_percentage(
     return 1 - (1 / (k**2)) if k > 1 else 0
 
 
-def trailing_window(
+def rolling_window(
     X: Union[np.ndarray, List[float]],
     rolling_window: int = 60,
     func: Callable = None,
@@ -94,6 +94,64 @@ def trailing_window(
     result = np.array([func(window, **kwargs) for window in windows])
 
     return np.concatenate(([result[0]] * (rolling_window - 1), result))
+
+
+def expanding_window(
+    X: Union[np.ndarray, List[float]], func: Callable = None, **kwargs
+) -> np.ndarray:
+    """
+    Apply a function over an expanding window of a 1D time series.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data (e.g., log-prices).
+    func : Callable
+        Function to apply to each window. Must accept a 1D array as first argument.
+    **kwargs
+        Additional keyword arguments to pass to `func`.
+
+    Returns
+    -------
+    result : ndarray, shape (n_samples,)
+        Array of function values for each expanding window.
+    """
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    result = np.array([func(X[: i + 1], **kwargs) for i in range(X.shape[0])])
+
+    return result
+
+
+def jacknife(
+    X: Union[np.ndarray, List[float]], func: Callable = None, **kwargs
+) -> np.ndarray:
+    """
+    Apply a function using the jackknife approach on a 1D time series.
+    Parameters
+    ----------
+    X : array-like, shape (n_samples,)
+        1D time series data (e.g., log-prices).
+    func : Callable
+        Function to apply to each jackknife sample. Must accept a 1D array as first argument.
+    **kwargs
+        Additional keyword arguments to pass to `func`.
+    Returns
+    -------
+    result : ndarray, shape (n_samples,)
+        Array of function values for each jackknife sample.
+    """
+    X = np.asarray(X, dtype=np.float64)
+
+    if X.ndim != 1:
+        raise ValueError("Input data must be 1-dimensional")
+
+    result = np.array([func(np.delete(X, i), **kwargs) for i in range(X.shape[0])])
+
+    return result
 
 
 def mad(x):

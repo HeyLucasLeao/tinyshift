@@ -3,7 +3,6 @@
 # Licensed under the MIT License
 
 
-from .continuous import ContinuousDriftTracker
-from .categorical import CategoricalDriftTracker
+from .continuous import *
+from .categorical import *
 from .performance import PerformanceTracker
-from .anomaly import AnomalyTracker
