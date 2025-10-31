@@ -17,14 +17,11 @@ class PerformanceTracker(BaseModel):
         y_pred: Union[pd.Series, List[np.ndarray], List[list]],
         metric_score: Callable = f1_score,
         statistic: Callable = np.mean,
-        confidence_level: float = 0.997,
-        n_resamples: int = 1000,
-        random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
-        confidence_interval: bool = False,
     ):
         """
         Initialize a tracker for monitoring model performance over time using a specified evaluation metric.
+
         The tracker compares the performance metric across time periods to a reference distribution
         and identifies potential performance degradation.
 
@@ -40,29 +37,10 @@ class PerformanceTracker(BaseModel):
         statistic : Callable, optional
             The statistic function used to summarize the reference metric distribution.
             Default is `np.mean`.
-        confidence_level : float, optional
-            The confidence level for calculating statistical thresholds.
-            Default is 0.997.
-        n_resamples : int, optional
-            Number of resamples for bootstrapping when calculating statistics.
-            Default is 1000.
-        random_state : int, optional
-            Seed for reproducibility of random resampling.
-            Default is 42.
         drift_limit : Union[str, Tuple[float, float]], optional
             The method or thresholds for drift detection. If "stddev", thresholds are based on standard deviation.
             If a tuple, it specifies custom lower and upper thresholds.
             Default is "stddev".
-        confidence_interval : bool, optional
-            Whether to calculate confidence intervals for the metric distribution.
-            Default is False.
-
-        Attributes
-        ----------
-        metric_score : Callable
-            The evaluation metric function used for tracking performance.
-        reference_distribution : pd.Series
-            The performance metric distribution of the reference dataset.
 
         Raises
         ------
@@ -78,12 +56,7 @@ class PerformanceTracker(BaseModel):
         self.reference_distribution = self.score(y, y_pred)
         super().__init__(
             self.reference_distribution,
-            confidence_level,
-            statistic,
-            n_resamples,
-            random_state,
             drift_limit,
-            confidence_interval,
         )
 
     def score(

@@ -11,9 +11,9 @@ from typing import Callable, Tuple, Union, List
 from collections import Counter
 
 
-def l_infinity(a, b):
+def chebyshev(a, b):
     """
-    Compute the L-infinity distance between two distributions.
+    Compute the Chebyshev distance between two distributions.
     """
     return np.max(np.abs(a - b))
 
@@ -27,26 +27,23 @@ def psi(observed, expected, epsilon=1e-4):
     return np.sum((observed - expected) * np.log(observed / expected))
 
 
-class CategoricalDriftTracker(BaseModel):
+class CatDrift(BaseModel):
     def __init__(
         self,
         X: Union[pd.Series, List[np.ndarray], List[list]],
-        func: str = "l_infinity",
-        statistic: Callable = np.mean,
-        confidence_level: float = 0.997,
-        n_resamples: int = 1000,
-        random_state: int = 42,
+        func: str = "chebyshev",
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
-        confidence_interval: bool = False,
-        cumulative: bool = True,
+        method: str = "expanding",
+        window_size: int = None,
     ):
         """
-        A tracker for identifying drift in categorical data over time. The tracker uses
-        a X dataset to compute a baseline distribution and compares subsequent data
-        for deviations based on a distance metric and drift limits.
+        A tracker for identifying drift in categorical data over time.
+
+        The tracker uses a reference dataset to compute a baseline distribution and compares
+        subsequent data for deviations based on a distance metric and drift limits.
 
         Available distance metrics:
-        - 'l_infinity': Maximum absolute difference between category probabilities
+        - 'chebyshev': Maximum absolute difference between category probabilities
         - 'jensenshannon': Jensen-Shannon divergence (symmetric, sqrt of JS distance)
         - 'psi': Population Stability Index (sensitive to small probability changes)
 
@@ -55,46 +52,51 @@ class CategoricalDriftTracker(BaseModel):
         X : Union[pd.Series, List[np.ndarray], List[list]]
             Input categorical data. For time series, each element represents a period's
             categorical observations.
-        func : str, optional
-            Distance metric: 'l_infinity' (default), 'jensenshannon', or 'psi'.
-            Default is 'l_infinity'.
-        statistic : Callable, optional
-            Statistic function to summarize the distance metrics (e.g., np.mean, np.median).
-            Default is np.mean.
-        confidence_level : float, optional
-            Confidence level for statistical thresholds (e.g., 0.997 for 3σ).
-            Default is 0.997.
-        n_resamples : int, optional
-            Number of resamples for bootstrapping when calculating statistics.
-            Default is 1000.
-        random_state : int, optional
+        func : str, default='chebyshev'
+            Distance metric to use for drift detection.
+        statistic : Callable, default=np.mean
+            Function to summarize the distance metrics.
+        random_state : int, default=42
             Seed for reproducible bootstrapping.
-            Default is 42.
-        drift_limit : Union[str, Tuple[float, float]], optional
-            Drift threshold definition:
-            - 'stddev': thresholds based on standard deviation of reference metrics
-            - tuple: custom (lower, upper) thresholds
-            Default is 'stddev'.
-        confidence_interval : bool, optional
-            Whether to compute bootstrap CIs.
-            Default is False.
-        cumulative : bool, optional
-            - True (cumulative): Aggregates past data for each comparison. Better for gradual drift
-              and noisy data. Computationally efficient (O(n)).
-            - False (jackknife): Leave-one-out approach. Better for point anomalies but
-              computationally intensive (O(n²)).
-            Default is True.
+        drift_limit : Union[str, Tuple[float, float]], default='stddev'
+            Drift threshold definition. Use 'stddev' for automatic thresholds or
+            provide custom (lower, upper) bounds.
+        method : str, default='expanding'
+            Comparison method to use:
+            - 'expanding': Each point compared against all accumulated past data
+            - 'rolling': Each point compared against a fixed-size rolling window
+            - 'jackknife': Each point compared against all other points (leave-one-out)
+        window_size : int, optional
+            Size of the rolling window when method='rolling'. Required for rolling method.
 
         Attributes
         ----------
         func : Callable
             The distance function used for drift calculation.
         reference_distribution : np.ndarray
-            Normalized probability distribution of reference categories
+            Normalized probability distribution of reference categories.
         reference_distance : pd.Series
-            Calculated distances between reference periods
+            Calculated distances between reference periods.
+        method : str
+            The comparison method being used.
+        window_size : int
+            The window size for rolling method.
         """
-        self.cumulative = cumulative
+        self.method = method
+        self.window_size = window_size
+
+        # Validate method and window_size
+        if method not in ["expanding", "rolling", "jackknife"]:
+            raise ValueError(
+                f"method must be one of ['expanding', 'rolling', 'jackknife'], got '{method}'"
+            )
+
+        if method == "rolling" and window_size is None:
+            raise ValueError("window_size is required when method='rolling'")
+
+        if method == "rolling" and window_size < 2:
+            raise ValueError("window_size must be >= 2 for rolling method")
+
         self.func = self._selection_function(func)
 
         frequency = self._calculate_frequency(
@@ -111,12 +113,7 @@ class CategoricalDriftTracker(BaseModel):
 
         super().__init__(
             self.reference_distance,
-            confidence_level,
-            statistic,
-            n_resamples,
-            random_state,
             drift_limit,
-            confidence_interval,
         )
 
     def _calculate_frequency(
@@ -135,8 +132,8 @@ class CategoricalDriftTracker(BaseModel):
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
 
-        if func_name == "l_infinity":
-            selected_func = l_infinity
+        if func_name == "chebyshev":
+            selected_func = chebyshev
         elif func_name == "jensenshannon":
             selected_func = jensenshannon
         elif func_name == "psi":
@@ -150,17 +147,19 @@ class CategoricalDriftTracker(BaseModel):
         X: Union[pd.Series, List[np.ndarray], List[list]],
     ) -> pd.Series:
         """
-        Compute a distance metric over a rolling cumulative window or using a jackknife approach.
+        Compute a distance metric using different comparison strategies.
 
-        - **Cumulative mode (cumulative=True)**:
-            For each point, compares it against *all past data* (aggregated up to that point).
-            Best for detecting gradual drift over time.
+        - **Expanding window (method='expanding')**:
+            Each point is compared against all accumulated past data.
+            Best for detecting gradual drift over time. Efficient O(n).
 
-        - **Jackknife mode (cumulative=False)**:
-            For each point, compares it against *all other points* (leave-one-out approach).
-            This provides a more isolated measure of drift at each timestep but is computationally
-            more intensive. Useful for detecting point-wise anomalies or when independence between
-            periods is assumed.
+        - **Rolling window (method='rolling')**:
+            Each point is compared against a fixed-size window of past data.
+            Good for detecting recent drift while being less sensitive to older data.
+
+        - **Jackknife (method='jackknife')**:
+            Each point is compared against all other points (leave-one-out).
+            Better for detecting point anomalies. Computationally intensive O(n²).
 
         Parameters
         ----------
@@ -172,32 +171,61 @@ class CategoricalDriftTracker(BaseModel):
         -------
         pd.Series
             Distance metrics indexed by time period. Note:
-            - Cumulative mode: First period is dropped (no reference)
-            - Jackknife mode: All periods included
+            - Expanding: First period is dropped (no reference)
+            - Rolling: First (window_size-1) periods are dropped
+            - Jackknife: All periods included
         """
-        n = len(X)
-        distances = np.zeros(n)
         index = self._get_index(X)
         X = np.asarray(X)
 
-        if self.cumulative:
-            past_value = np.zeros(X.shape[1], dtype=np.int32)
-            for i in range(1, n):
-                past_value = past_value + X[i - 1]
-                past_value = past_value / np.sum(past_value)
-                current_value = X[i] / np.sum(X[i])
-                dist = self.func(past_value, current_value)
-                distances[i] = dist
-            return pd.Series(distances[1:], index=index[1:])
+        if self.method == "expanding":
+            return self._expanding_distance(X, index)
+        elif self.method == "rolling":
+            return self._rolling_distance(X, index)
+        elif self.method == "jackknife":
+            return self._jackknife_distance(X, index)
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+    def _expanding_distance(self, X: np.ndarray, index) -> pd.Series:
+        """Compute distances using expanding window approach."""
+        n = len(X)
+        distances = np.zeros(n)
+
+        past_value = np.zeros(X.shape[1], dtype=np.float64)
+        for i in range(1, n):
+            past_value = past_value + X[i - 1]
+            past_value_norm = past_value / np.sum(past_value)
+            current_value_norm = X[i] / np.sum(X[i])
+            distances[i] = self.func(past_value_norm, current_value_norm)
+
+        return pd.Series(distances[1:], index=index[1:])
+
+    def _rolling_distance(self, X: np.ndarray, index) -> pd.Series:
+        """Compute distances using rolling window approach."""
+        n = len(X)
+        distances = np.zeros(n)
+
+        for i in range(X.shape[0] - self.window_size + 1):
+            past_data = X[i : i + self.window_size]
+            past_value = past_data.sum(axis=0)
+            past_value_norm = past_value / np.sum(past_value)
+
+            current_value_norm = X[i] / np.sum(X[i])
+            distances[i] = self.func(past_value_norm, current_value_norm)
+
+        return pd.Series(distances[self.window_size :], index=index[self.window_size :])
+
+    def _jackknife_distance(self, X: np.ndarray, index) -> pd.Series:
+        """Compute distances using jackknife (leave-one-out) approach."""
+        n = len(X)
+        distances = np.zeros(n)
 
         for i in range(n):
-            current_value = X[i] / np.sum(X[i])
+            current_value_norm = X[i] / np.sum(X[i])
             past_value = np.delete(X, i, axis=0)
-            past_value = past_value.sum(axis=0) / np.sum(past_value.sum(axis=0))
-            distances[i] = self.func(
-                past_value,
-                current_value,
-            )
+            past_value_norm = past_value.sum(axis=0) / np.sum(past_value.sum(axis=0))
+            distances[i] = self.func(past_value_norm, current_value_norm)
 
         return pd.Series(distances, index=index)
 
