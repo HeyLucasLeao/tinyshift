@@ -27,14 +27,41 @@ def psi(observed, expected, epsilon=1e-4):
     return np.sum((observed - expected) * np.log(observed / expected))
 
 
+import numpy as np
+import pandas as pd
+from scipy.spatial.distance import jensenshannon
+from tinyshift.tracker.base import BaseModel
+from typing import Callable, Tuple, Union, List
+from collections import Counter
+
+
+def chebyshev(a, b):
+    """
+    Compute the Chebyshev distance between two distributions.
+    """
+    return np.max(np.abs(a - b))
+
+
+def psi(observed, expected, epsilon=1e-4):
+    """
+    Calculate Population Stability Index (PSI) between two distributions.
+    """
+    observed = np.clip(observed, epsilon, 1)
+    expected = np.clip(expected, epsilon, 1)
+    return np.sum((observed - expected) * np.log(observed / expected))
+
+
 class CatDrift(BaseModel):
     def __init__(
         self,
-        X: Union[pd.Series, List[np.ndarray], List[list]],
+        df: pd.DataFrame,
+        freq: str = None,
+        id_col: str = "unique_id",
+        time_col: str = "ds",
+        target_col: str = "y",
         func: str = "chebyshev",
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
         method: str = "expanding",
-        window_size: int = None,
     ):
         """
         A tracker for identifying drift in categorical data over time.
@@ -49,15 +76,18 @@ class CatDrift(BaseModel):
 
         Parameters
         ----------
-        X : Union[pd.Series, List[np.ndarray], List[list]]
-            Input categorical data. For time series, each element represents a period's
-            categorical observations.
+        df : pd.DataFrame
+            Input dataframe containing categorical data with time series structure.
+        freq : str, optional
+            Frequency for time grouping (e.g., 'D', 'W', 'M'). If None, uses original time resolution.
+        id_col : str, default='unique_id'
+            Column name for entity identifiers.
+        time_col : str, default='ds'
+            Column name for timestamp/date information.
+        target_col : str, default='y'
+            Column name containing categorical values to track for drift.
         func : str, default='chebyshev'
             Distance metric to use for drift detection.
-        statistic : Callable, default=np.mean
-            Function to summarize the distance metrics.
-        random_state : int, default=42
-            Seed for reproducible bootstrapping.
         drift_limit : Union[str, Tuple[float, float]], default='stddev'
             Drift threshold definition. Use 'stddev' for automatic thresholds or
             provide custom (lower, upper) bounds.
@@ -66,47 +96,40 @@ class CatDrift(BaseModel):
             - 'expanding': Each point compared against all accumulated past data
             - 'rolling': Each point compared against a fixed-size rolling window
             - 'jackknife': Each point compared against all other points (leave-one-out)
-        window_size : int, optional
-            Size of the rolling window when method='rolling'. Required for rolling method.
 
         Attributes
         ----------
         func : Callable
             The distance function used for drift calculation.
-        reference_distribution : np.ndarray
+        reference_distribution : pd.DataFrame
             Normalized probability distribution of reference categories.
         reference_distance : pd.Series
             Calculated distances between reference periods.
         method : str
             The comparison method being used.
-        window_size : int
-            The window size for rolling method.
+        freq : str
+            The frequency parameter for time grouping.
         """
         self.method = method
-        self.window_size = window_size
+        self.freq = freq
 
-        # Validate method and window_size
-        if method not in ["expanding", "rolling", "jackknife"]:
+        if method not in ["expanding", "jackknife"]:
             raise ValueError(
-                f"method must be one of ['expanding', 'rolling', 'jackknife'], got '{method}'"
+                f"method must be one of ['expanding', 'jackknife'], got '{method}'"
             )
-
-        if method == "rolling" and window_size is None:
-            raise ValueError("window_size is required when method='rolling'")
-
-        if method == "rolling" and window_size < 2:
-            raise ValueError("window_size must be >= 2 for rolling method")
 
         self.func = self._selection_function(func)
 
-        frequency = self._calculate_frequency(
-            X,
+        frequency = (
+            df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq), target_col])[
+                target_col
+            ]
+            .size()
+            .unstack(fill_value=0)
         )
-
-        self.reference_distribution = frequency.sum(axis=0) / np.sum(
+        self.reference_distribution = frequency.groupby([id_col]).sum() / np.sum(
             frequency.sum(axis=0)
         )
-
         self.reference_distance = self._generate_distance(
             frequency,
         )
@@ -114,20 +137,8 @@ class CatDrift(BaseModel):
         super().__init__(
             self.reference_distance,
             drift_limit,
+            id_col,
         )
-
-    def _calculate_frequency(
-        self,
-        X: Union[pd.Series, List[np.ndarray], List[list]],
-    ) -> pd.DataFrame:
-        """
-        Calculates the percent distribution of a categorical column grouped by a specified time period.
-        """
-        index = self._get_index(X)
-        X = np.asanyarray(X)
-        freq = [Counter(item) for item in X]
-        categories = np.unique(np.concatenate(X))
-        return pd.DataFrame(freq, columns=categories, index=index)
 
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
@@ -153,10 +164,6 @@ class CatDrift(BaseModel):
             Each point is compared against all accumulated past data.
             Best for detecting gradual drift over time. Efficient O(n).
 
-        - **Rolling window (method='rolling')**:
-            Each point is compared against a fixed-size window of past data.
-            Good for detecting recent drift while being less sensitive to older data.
-
         - **Jackknife (method='jackknife')**:
             Each point is compared against all other points (leave-one-out).
             Better for detecting point anomalies. Computationally intensive O(n²).
@@ -172,7 +179,6 @@ class CatDrift(BaseModel):
         pd.Series
             Distance metrics indexed by time period. Note:
             - Expanding: First period is dropped (no reference)
-            - Rolling: First (window_size-1) periods are dropped
             - Jackknife: All periods included
         """
         index = self._get_index(X)
@@ -180,8 +186,6 @@ class CatDrift(BaseModel):
 
         if self.method == "expanding":
             return self._expanding_distance(X, index)
-        elif self.method == "rolling":
-            return self._rolling_distance(X, index)
         elif self.method == "jackknife":
             return self._jackknife_distance(X, index)
         else:
@@ -199,22 +203,7 @@ class CatDrift(BaseModel):
             current_value_norm = X[i] / np.sum(X[i])
             distances[i] = self.func(past_value_norm, current_value_norm)
 
-        return pd.Series(distances[1:], index=index[1:])
-
-    def _rolling_distance(self, X: np.ndarray, index) -> pd.Series:
-        """Compute distances using rolling window approach."""
-        n = len(X)
-        distances = np.zeros(n)
-
-        for i in range(X.shape[0] - self.window_size + 1):
-            past_data = X[i : i + self.window_size]
-            past_value = past_data.sum(axis=0)
-            past_value_norm = past_value / np.sum(past_value)
-
-            current_value_norm = X[i] / np.sum(X[i])
-            distances[i] = self.func(past_value_norm, current_value_norm)
-
-        return pd.Series(distances[self.window_size :], index=index[self.window_size :])
+        return pd.Series(distances, index=index)
 
     def _jackknife_distance(self, X: np.ndarray, index) -> pd.Series:
         """Compute distances using jackknife (leave-one-out) approach."""
@@ -231,14 +220,26 @@ class CatDrift(BaseModel):
 
     def score(
         self,
-        X: Union[pd.Series, List[np.ndarray], List[list]],
+        df: pd.DataFrame,
+        id_col: str = "unique_id",
+        time_col: str = "ds",
+        target_col: str = "y",
     ) -> pd.Series:
         """
         Compute the drift metric between the reference distribution and new data points.
         """
-        freq = self._calculate_frequency(X)
-        percent = freq.div(freq.sum(axis=1), axis=0)
+        frequency = (
+            df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq), target_col])[
+                target_col
+            ]
+            .size()
+            .unstack(fill_value=0)
+        )
+        percent = frequency.div(frequency.sum(axis=1), axis=0)
 
-        return percent.apply(
-            lambda row: self.func(row, self.reference_distribution), axis=1
+        return (
+            percent.groupby([id_col, time_col])
+            .apply(lambda row: self.func(row, self.reference_distribution))
+            .rename("metric")
+            .reset_index()
         )
