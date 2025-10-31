@@ -13,45 +13,44 @@ from typing import Callable, Tuple, Union, List
 class ConDrift(BaseModel):
     def __init__(
         self,
-        X: Union[pd.Series, List[np.ndarray], List[list]],
+        df: pd.DataFrame,
+        freq: str = None,
+        id_col: str = "unique_id",
+        time_col: str = "ds",
+        target_col: str = "y",
         func: str = "ws",
-        statistic: Callable = np.mean,
-        random_state: int = 42,
         drift_limit: Union[str, Tuple[float, float]] = "stddev",
         method: str = "expanding",
-        window_size: int = None,
     ):
         """
         A Tracker for identifying drift in continuous data over time using statistical distance metrics.
 
         Parameters
         ----------
-        X : Union[pd.Series, List[np.ndarray], List[list]]
-            Input continuous data. For time series, each element represents a period's
-            continuous observations.
-        func : str, optional
-            Distance function: 'ws' (Wasserstein distance). Default is 'ws'.
-        statistic : callable, optional
-            Statistic function to summarize the distance metrics (e.g., np.mean, np.median).
-            Default is np.mean.
-        random_state : int, optional
-            Seed for reproducible resampling. Default is 42.
-        drift_limit : str or tuple, optional
+        df : pd.DataFrame
+            Input dataframe containing time series data with multiple entities.
+        freq : str, optional
+            Frequency string for time grouping (e.g., 'D', 'W', 'M'). Default is None.
+        id_col : str, default='unique_id'
+            Column name containing entity identifiers.
+        time_col : str, default='ds'
+            Column name containing timestamps.
+        target_col : str, default='y'
+            Column name containing the target continuous values.
+        func : str, default='ws'
+            Distance function: 'ws' (Wasserstein distance).
+        drift_limit : str or tuple, default='stddev'
             Drift threshold definition:
             - 'stddev': thresholds based on standard deviation of reference metrics
             - tuple: custom (lower, upper) thresholds
-            Default is 'stddev'.
         method : str, default='expanding'
             Comparison method to use:
             - 'expanding': Each point compared against all accumulated past data
-            - 'rolling': Each point compared against a fixed-size rolling window
             - 'jackknife': Each point compared against all other points (leave-one-out)
-        window_size : int, optional
-            Size of the rolling window when method='rolling'. Required for rolling method.
 
         Attributes
         ----------
-        reference_distribution : ArrayLike
+        reference_distribution : pd.DataFrame
             The reference dataset used as baseline.
         reference_distance : pd.Series
             Calculated distance metrics for the reference dataset.
@@ -59,33 +58,32 @@ class ConDrift(BaseModel):
             The selected distance function.
         method : str
             The comparison method being used.
-        window_size : int
-            The window size for rolling method.
+        freq : str
+            The frequency string for time grouping.
         """
         self.method = method
-        self.window_size = window_size
+        self.freq = freq
 
-        if method not in ["expanding", "rolling", "jackknife"]:
+        if self.freq is None:
+            raise ValueError("freq must be specified for time grouping.")
+
+        if method not in ["expanding", "jackknife"]:
             raise ValueError(
-                f"method must be one of ['expanding', 'rolling', 'jackknife'], got '{method}'"
+                f"method must be one of ['expanding', 'jackknife'], got '{method}'"
             )
-
-        if method == "rolling" and window_size is None:
-            raise ValueError("window_size is required when method='rolling'")
-
-        if method == "rolling" and window_size < 2:
-            raise ValueError("window_size must be >= 2 for rolling method")
 
         self.func = func
         self.func = self._selection_function(func)
-        self.reference_distribution = X
-        self.reference_distance = self._generate_distance(X)
+        self.reference_distribution = df
+
+        self.reference_distance = df.groupby(
+            [id_col, pd.Grouper(key=time_col, freq=self.freq)]
+        )[target_col].apply(self._generate_distance)
 
         super().__init__(
             self.reference_distance,
-            statistic,
-            random_state,
             drift_limit,
+            id_col,
         )
 
     def _wasserstein(self, a, b):
@@ -112,10 +110,6 @@ class ConDrift(BaseModel):
             Each point is compared against all accumulated past data.
             Best for detecting gradual drift over time. Efficient O(n).
 
-        - **Rolling window (method='rolling')**:
-            Each point is compared against a fixed-size window of past data.
-            Good for detecting recent drift while being less sensitive to older data.
-
         - **Jackknife (method='jackknife')**:
             Each point is compared against all other points (leave-one-out).
             Better for detecting point anomalies. Computationally intensive O(n²).
@@ -138,8 +132,6 @@ class ConDrift(BaseModel):
 
         if self.method == "expanding":
             return self._expanding_distance(X, index)
-        elif self.method == "rolling":
-            return self._rolling_distance(X, index)
         elif self.method == "jackknife":
             return self._jackknife_distance(X, index)
         else:
@@ -155,18 +147,7 @@ class ConDrift(BaseModel):
             past_value = np.concatenate([past_value, X[i - 1]])
             distances[i] = self.func(past_value, X[i])
 
-        return pd.Series(distances[1:], index=index[1:])
-
-    def _rolling_distance(self, X: np.ndarray, index) -> pd.Series:
-        """Compute distances using rolling window approach."""
-        n = len(X)
-        distances = np.zeros(n)
-
-        for i in range(X.shape[0] - self.window_size + 1):
-            past_data = np.concatenate(X[i : i + self.window_size])
-            distances[i] = self.func(past_data, X[i])
-
-        return pd.Series(distances[self.window_size :], index=index[self.window_size :])
+        return pd.Series(distances, index=index)
 
     def _jackknife_distance(self, X: np.ndarray, index) -> pd.Series:
         """Compute distances using jackknife (leave-one-out) approach."""
