@@ -8,63 +8,62 @@ import pandas as pd
 from scipy.stats import wasserstein_distance
 from .base import BaseModel
 from typing import Callable, Tuple, Union, List
+from sklearn.base import BaseEstimator
 
 
-class ConDrift(BaseModel):
+class ConDrift(BaseModel, BaseEstimator):
+    """
+    A tracker for identifying drift in continuous data over time.
+
+    The tracker uses a reference dataset to compute a baseline distribution and compares
+    subsequent data for deviations based on a distance metric and drift limits.
+
+    Available distance metrics:
+    - 'ws': Wasserstein distance (Earth Mover's Distance) - measures the minimum cost
+      to transform one distribution into another
+
+    Comparison methods:
+    - 'expanding': Each point compared against all accumulated past data
+    - 'jackknife': Each point compared against all other points (leave-one-out)
+
+    Attributes
+    ----------
+    func : Callable
+        The distance function used for drift calculation.
+    reference_distribution : dict
+        Dictionary mapping unique_id to reference data arrays used as baseline.
+    method : str
+        The comparison method being used.
+    freq : str
+        The frequency parameter for time grouping.
+    """
+
     def __init__(
         self,
-        df: pd.DataFrame,
         freq: str = None,
-        id_col: str = "unique_id",
-        time_col: str = "ds",
-        target_col: str = "y",
         func: str = "ws",
         drift_limit: Union[str, Tuple[float, float]] = "auto",
         method: str = "expanding",
     ):
         """
-        A Tracker for identifying drift in continuous data over time using statistical distance metrics.
+        Initialize the continuous drift detector.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            Input dataframe containing time series data with multiple entities.
-        freq : str, optional
-            Frequency string for time grouping (e.g., 'D', 'W', 'M'). Default is None.
-        id_col : str, default='unique_id'
-            Column name containing entity identifiers.
-        time_col : str, default='ds'
-            Column name containing timestamps.
-        target_col : str, default='y'
-            Column name containing the target continuous values.
-        func : str, default='ws'
-            Distance function: 'ws' (Wasserstein distance).
-        drift_limit : str or tuple, default='stddev'
-            Drift threshold definition:
-            - 'stddev': thresholds based on standard deviation of reference metrics
-            - tuple: custom (lower, upper) thresholds
-        method : str, default='expanding'
-            Comparison method to use:
-            - 'expanding': Each point compared against all accumulated past data
-            - 'jackknife': Each point compared against all other points (leave-one-out)
-
-        Attributes
-        ----------
-        reference_distribution : pd.DataFrame
-            The reference dataset used as baseline.
-        reference_distance : pd.Series
-            Calculated distance metrics for the reference dataset.
-        func : Callable
-            The selected distance function.
-        method : str
-            The comparison method being used.
         freq : str
-            The frequency string for time grouping.
+            Frequency for time grouping (e.g., 'D', 'W', 'M'). Required for time-based analysis.
+        func : str, default='ws'
+            Distance metric to use for drift detection. Options: 'ws' (Wasserstein distance).
+        drift_limit : Union[str, Tuple[float, float]], default='auto'
+            Drift threshold definition. Use 'auto' for automatic thresholds or
+            provide custom (lower, upper) bounds.
+        method : str, default='expanding'
+            Comparison method:
+            - 'expanding': Each point compared against accumulated past data
+            - 'jackknife': Each point compared against all other points (leave-one-out)
         """
-        self.method = method
-        self.freq = freq
 
-        if self.freq is None:
+        if freq is None:
             raise ValueError("freq must be specified for time grouping.")
 
         if method not in ["expanding", "jackknife"]:
@@ -72,29 +71,65 @@ class ConDrift(BaseModel):
                 f"method must be one of ['expanding', 'jackknife'], got '{method}'"
             )
 
-        self.func = func
+        self.freq = freq
         self.func = self._selection_function(func)
-        self.reference_distribution = df.groupby(
-            [id_col, pd.Grouper(key=time_col, freq=self.freq)]
-        )[target_col].apply(np.asarray)
+        self.drift_limit = drift_limit
+        self.method = method
+        self.reference_distribution = None
 
-        self.reference_distance = self._generate_distance(self.reference_distribution)
+    def fit(
+        self,
+        df: pd.DataFrame,
+        id_col: str = "unique_id",
+        time_col: str = "ds",
+        target_col: str = "y",
+    ) -> "ConDrift":
+        """
+        Fit the drift detector to reference data.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Reference dataframe containing continuous data with time series structure.
+        id_col : str, default='unique_id'
+            Column name identifying unique time series entities.
+        time_col : str, default='ds'
+            Column name containing timestamps for time-based grouping.
+        target_col : str, default='y'
+            Column name containing continuous values to analyze for drift.
+
+        Returns
+        -------
+        self : ConDrift
+            Returns self for method chaining.
+        """
+
+        reference = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
+            target_col
+        ].apply(np.asarray)
+
+        reference_distance = self._generate_distance(reference)
+
+        self.reference_distribution = {
+            unique_id: np.concatenate(reference.loc[unique_id].values).astype(
+                np.float32
+            )
+            for unique_id in reference.index.get_level_values(0).unique()
+        }
 
         super().__init__(
-            self.reference_distance,
-            drift_limit,
+            reference_distance,
+            self.drift_limit,
             id_col,
         )
 
-    def _wasserstein(self, a: np.ndarray, b: np.ndarray) -> float:
-        """Calculate the Wasserstein Distance."""
-        return wasserstein_distance(a, b)
+        return self
 
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
 
         if func_name == "ws":
-            selected_func = self._wasserstein
+            selected_func = wasserstein_distance
         else:
             raise ValueError(f"Unsupported function: {func_name}")
         return selected_func
@@ -124,7 +159,6 @@ class ConDrift(BaseModel):
         pd.Series
             Distance metrics indexed by time period. Note:
             - Expanding: First period is dropped (no reference)
-            - Rolling: First (window_size-1) periods are dropped
             - Jackknife: All periods included
         """
         index = self._get_index(X)
@@ -175,12 +209,11 @@ class ConDrift(BaseModel):
         results = []
         for unique_id in grouped_data.index.get_level_values(0).unique():
             id_data = grouped_data.loc[unique_id]
-            reference_data = self.reference_distribution.loc[unique_id]
-            reference_combined = np.concatenate(reference_data.values)
+            reference_data = self.reference_distribution[unique_id]
 
             distances = np.array(
                 [
-                    self.func(current_data, reference_combined)
+                    self.func(current_data, reference_data)
                     for current_data in id_data.values
                 ]
             )

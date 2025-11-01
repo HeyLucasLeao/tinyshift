@@ -1,119 +1,204 @@
 # TinyShift
 
-**TinyShift** is a small experimental Python library designed to detect **data drifts** and **performance drops** in machine learning models over time. The main goal of the project is to provide quick and tiny monitoring tools to help identify when data or model performance unexpectedly change.
-For more robust solutions, I highly recommend [Nannyml.](https://github.com/NannyML/nannyml)
+**TinyShift** is a lightweight, sklearn-compatible Python library designed for **data drift detection**, **outlier identification**, and **MLOps monitoring** in production machine learning systems. The library provides modular, easy-to-use tools for detecting when data distributions or model performance change over time, with comprehensive visualization capabilities.
+
+For enterprise-grade solutions, consider [Nannyml](https://github.com/NannyML/nannyml).
+
+## Features
+
+- **Data Drift Detection**: Categorical and continuous data drift monitoring with multiple distance metrics
+- **Outlier Detection**: **HBOS**, **PCA-based** and **SPAD** outlier detection algorithms  
+- **Time Series Analysis**: Seasonality decomposition, trend analysis, and forecasting diagnostics
 
 ## Technologies Used
 
-- **Python 3.x**
-- **Scikit-learn**
-- **Pandas**
+- **Python 3.10+** 
+- **Scikit-learn 1.3.0+**
+- **Pandas 2.3.0+** 
 - **NumPy**
-- **Plotly**
-- **Scipy**
+- **SciPy**
+- **Statsmodels 0.14.5+**
+- **Plotly 5.22.0+** (optional, for plotting)
 
-## Installation
+## 📦 Installation
 
-To install **TinyShift** in your development environment, use **pip**:
-
+Install TinyShift using pip:
 
 ```bash
 pip install tinyshift
 ```
-If you prefer to clone the repository and install manually:
+
+### Development Installation
+
+Clone and install from source:
+
 ```bash
 git clone https://github.com/HeyLucasLeao/tinyshift.git
-cd tinyshift    
-pip install .
+cd tinyshift
+pip install -e .
 ```
 
-> **Note:** If you want to enable plotting capabilities, you need to install the extras using UV:
+## 📖 Quick Start
 
-```bash
-uv install --all-extras
-```
+### 1. Categorical Data Drift Detection
 
-## Usage
-Below are basic examples of how to use TinyShift's features.
-### 1. Data Drift Detection
-To detect data drift, simply score in a new dataset to compare with the reference data. The DataDriftDetector will calculate metrics to identify significant differences.
+TinyShift provides sklearn-compatible drift detectors that follow the familiar `fit()` and `score()` pattern:
 
 ```python
-from tinyshift.detector import CategoricalDriftDetector
+import pandas as pd
+from tinyshift.drift import CatDrift
 
-df = pd.DataFrame("examples.csv")
-df_reference = df[(df["datetime"] < '2024-07-01')].copy()
-df_analysis = df[(df["datetime"] >= '2024-07-01')].copy()
+# Load your data
+df = pd.read_csv("data.csv")
+reference_data = df[df["date"] < '2024-07-01']
+analysis_data = df[df["date"] >= '2024-07-01'] 
 
-detector = CategoricalDriftTracker(df_reference, 'discrete_1', "datetime", "W", drift_limit='mad')
+# Initialize and fit the drift detector
+detector = CatDrift(
+    freq="D",                    # Daily frequency
+    func="chebyshev",           # Distance metric
+    drift_limit="auto",         # Automatic threshold detection
+    method="expanding"          # Comparison method
+)
 
-analysis_score = detector.score(df_analysis, "discrete_1", "datetime")
+# Fit on reference data
+detector.fit(reference_data)
 
-print(analysis_score)
+# Score new data for drift
+drift_scores = detector.predict(analysis_data)
+print(drift_scores)
 ```
 
-### 2. Performance Tracker
-To track model performance over time, use the PerformanceMonitor, which will compare model accuracy on both old and new data.
-```python
-from tinyshift.tracker import PerformanceTracker
+Available distance metrics for **categorical** data:
+- `"chebyshev"`: Maximum absolute difference between distributions
+- `"jensenshannon"`: Jensen-Shannon divergence  
+- `"psi"`: Population Stability Index
 
-df_reference = pd.read_csv('refence.csv')
-df_analysis = pd.read_csv('analysis.csv')
-model = load_model('model.pkl') 
-df_analysis['prediction'] = model.predict(df_analysis["feature_0"])
+### 2. Continuous Data Drift Detection
 
-tracker = PerformanceTracker(df_reference, 'target', 'prediction', 'datetime', "W")
-
-analysis_score = tracker.score(df_analysis, 'target', 'prediction', 'datetime')
-
-print(analysis_score)
-```
-
-### 3. Visualization
-TinyShift also provides graphs to visualize the magnitude of drift and performance changes over time.
-```python
-tracker.plot.scatter(analysis_score, fig_type="png")
-
-tracker.plot.bar(analysis_score, fig_type="png")
-```
-
-### 4. Outlier Detection
-To detect outliers in your dataset, you can use the models provided by TinyShift. Currently, it offers the Histogram-Based Outlier Score (HBOS), Simple Probabilistic Anomaly Detector (SPAD), and SPAD+.
+For numerical features, use the continuous drift detector:
 
 ```python
-from tinyshift.outlier import SPAD
+from tinyshift.drift import ConDrift
 
-df = pd.read_csv('data.csv')
+# Initialize continuous drift detector
+detector = ConDrift(
+    freq="W",                   # Weekly frequency  
+    func="ws",                  # Wasserstein distance
+    drift_limit="auto",
+    method="expanding"
+)
 
-spad_plus = SPAD(plus=True)
-spad_plus.fit(df)
-
-anomaly_scores = spad_plus.decision_function(df)
-anomaly_pred = spad_plus.predict(df)
-
-print(anomaly_scores)
-print(anomaly_pred)
+# Fit and score
+detector.fit(reference_data)
+drift_scores = detector.score(analysis_data)
 ```
-### 5. Anomaly Tracker
-The Anomaly Tracker in TinyShift allows you to identify potential outliers based on the drift limit and anomaly scores generated during training. By setting a drift limit, the tracker can flag data points that exceed this threshold as possible outliers.
+
+### 3. Outlier Detection
+
+TinyShift includes sklearn-compatible outlier detection algorithms:
 
 ```python
-from tinyshift.tracker import AnomalyTracker
+from tinyshift.outlier import SPAD, HBOS, PCAReconstructionError
 
-model = load_model('model.pkl') 
+# SPAD (Simple Probabilistic Anomaly Detector)
+spad = SPAD(plus=True)
+spad.fit(X_train)
 
-tracker = AnomalyTracker(model, drift_limit='mad')
+outlier_scores = spad.decision_function(X_test)
+outlier_labels = spad.predict(X_test)
 
-df_analysis = pd.read_csv('analysis.csv')
+# HBOS (Histogram-Based Outlier Score)
+hbos = HBOS(dynamic_bins=True)
+hbos.fit(X_train, nbins="fd")
+scores = hbos.decision_function(X_test)
 
-outliers = tracker.score(df_analysis)
-
-print(outliers)
+# PCA-based outlier detection
+pca_detector = PCAReconstructionError()
+pca_detector.fit(X_train)
+pca_scores = pca_detector.decision_function(X_test)
 ```
-In this example, the `AnomalyTracker` is initialized with a reference model and a specified drift limit. The `score` method evaluates the analysis dataset, calculating anomaly scores and flagging data points that exceed the drift limit as potential outliers.
+### 4. Time Series Analysis and Diagnostics
 
-## Project Structure
-The basic structure of the project is as follows:
+TinyShift provides time series analysis capabilities:
+
+```python
+from tinyshift.plot import seasonal_decompose
+from tinyshift.series import trend_significance, permutation_auto_mutual_information
+
+# Seasonal decomposition with multiple periods
+seasonal_decompose(
+    time_series, 
+    periods=[7, 365],  # Weekly and yearly patterns
+    width=1200, 
+    height=800
+)
+
+# Test for significant trends
+trend_result = trend_significance(time_series, alpha=0.05)
+print(f"Significant trend: {trend_result}")
+
+# Stationary Analysis
+fig = stationarity_analysis(time_series)
+```
+
+### 5. Advanced Modeling Tools
+
+```python
+from tinyshift.modelling import filter_features_by_vif
+from tinyshift.stats import bootstrap_bca_interval
+
+# Detect multicollinearity
+mask = filter_features_by_vif(X, trehshold=5, verbose=True)
+X.columns[mask]
+
+# Bootstrap confidence intervals
+confidence_interval = bootstrap_bca_interval(
+    data, 
+    statistic=np.mean, 
+    alpha=0.05, 
+    n_bootstrap=1000
+)
+```
+
+## 📁 Project Structure
+
+```
+tinyshift/
+├── association_mining/          # Market basket analysis tools
+│   ├── analyzer.py             # Transaction pattern analysis
+│   └── encoder.py              # Data encoder
+├── drift/                      # Data drift detection 
+│   ├── base.py                 # Base drift detection classes  
+│   ├── categorical.py          # CatDrift for categorical features
+│   └── continuous.py           # ConDrift for numerical features
+├── examples/                   # Jupyter notebook examples
+│   ├── drift.ipynb            # Drift detection examples
+│   ├── outlier.ipynb          # Outlier detection demos
+│   ├── series.ipynb           # Time series analysis
+│   └── transaction_analyzer.ipynb
+├── modelling/                  # ML modeling utilities
+│   ├── multicollinearity.py   # VIF-based multicollinearity detection
+│   ├── residualizer.py        # Residualizer Feature
+│   └── scaler.py              # Custom scaling transformations
+├── outlier/                    # Outlier detection algorithms
+│   ├── base.py                 # Base outlier detection classes
+│   ├── hbos.py                 # Histogram-Based Outlier Score
+│   ├── pca.py                  # PCA-based outlier detection  
+│   └── spad.py                 # Simple Probabilistic Anomaly Detector
+├── plot/                       # Visualization capabilities  
+│   ├── correlation.py          # Correlation analysis plots
+│   └── diagnostic.py           # Time series diagnostics plots
+├── series/                     # Time series analysis tools
+│   ├── forecastability.py     # Forecast quality metrics
+│   ├── outlier.py             # Time series outlier detection
+│   └── stats.py               # Statistical analysis functions
+└── stats/                      # Statistical utilities
+    ├── bootstrap_bca.py        # Bootstrap confidence intervals
+    ├── statistical_interval.py # Statistical interval estimation
+    └── utils.py               # General statistical utilities
+```
+
 ```
 tinyshift
 ├── LICENSE
@@ -171,5 +256,32 @@ tinyshift
 │       └── performance.py
 ```
 
-### License
-This project is licensed under the MIT License - see the LICENSE file for more details.
+
+### Development Setup
+
+```bash
+git clone https://github.com/HeyLucasLeao/tinyshift.git
+cd tinyshift
+pip install -e ".[all]"
+```
+
+## 📋 Requirements
+
+- **Python**: 3.10+
+- **Core Dependencies**: 
+  - pandas (>2.3.0)
+  - scikit-learn (>1.3.0) 
+  - statsmodels (>=0.14.5)
+- **Optional Dependencies**:
+  - plotly (>5.22.0) - for visualization
+  - kaleido (<=0.2.1) - for static plot export
+  - nbformat (>=5.10.4) - for notebook support
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Inspired by [Nannyml](https://github.com/NannyML/nannyml)
+

@@ -8,6 +8,7 @@ import pandas as pd
 from scipy.spatial.distance import jensenshannon
 from .base import BaseModel
 from typing import Callable, Tuple, Union, List
+from sklearn.base import BaseEstimator
 
 
 def chebyshev(a, b):
@@ -26,69 +27,56 @@ def psi(observed, expected, epsilon=1e-4):
     return np.sum((observed - expected) * np.log(observed / expected))
 
 
-class CatDrift(BaseModel):
+class CatDrift(BaseModel, BaseEstimator):
+    """
+    A tracker for identifying drift in categorical data over time.
+
+    The tracker uses a reference dataset to compute a baseline distribution and compares
+    subsequent data for deviations based on a distance metric and drift limits.
+
+    Available distance metrics:
+    - 'chebyshev': Maximum absolute difference between category probabilities
+    - 'jensenshannon': Jensen-Shannon divergence (symmetric, sqrt of JS distance)
+    - 'psi': Population Stability Index (sensitive to small probability changes)
+
+    Attributes
+    ----------
+    func : Callable
+        The distance function used for drift calculation.
+    reference_distribution : dict
+        Normalized probability distribution of reference categories.
+    method : str
+        The comparison method being used.
+    freq : str
+        The frequency parameter for time grouping.
+    """
+
     def __init__(
         self,
-        df: pd.DataFrame,
         freq: str = None,
-        id_col: str = "unique_id",
-        time_col: str = "ds",
-        target_col: str = "y",
         func: str = "chebyshev",
         drift_limit: Union[str, Tuple[float, float]] = "auto",
         method: str = "expanding",
     ):
         """
-        A tracker for identifying drift in categorical data over time.
-
-        The tracker uses a reference dataset to compute a baseline distribution and compares
-        subsequent data for deviations based on a distance metric and drift limits.
-
-        Available distance metrics:
-        - 'chebyshev': Maximum absolute difference between category probabilities
-        - 'jensenshannon': Jensen-Shannon divergence (symmetric, sqrt of JS distance)
-        - 'psi': Population Stability Index (sensitive to small probability changes)
+        Initialize the categorical drift detector.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            Input dataframe containing categorical data with time series structure.
-        freq : str, optional
-            Frequency for time grouping (e.g., 'D', 'W', 'M'). If None, uses original time resolution.
-        id_col : str, default='unique_id'
-            Column name for entity identifiers.
-        time_col : str, default='ds'
-            Column name for timestamp/date information.
-        target_col : str, default='y'
-            Column name containing categorical values to track for drift.
+        freq : str
+            Frequency for time grouping (e.g., 'D', 'W', 'M'). Required for time-based analysis.
         func : str, default='chebyshev'
-            Distance metric to use for drift detection.
-        drift_limit : Union[str, Tuple[float, float]], default='stddev'
-            Drift threshold definition. Use 'stddev' for automatic thresholds or
+            Distance metric to use for drift detection. Options: 'chebyshev', 'jensenshannon', 'psi'.
+        drift_limit : Union[str, Tuple[float, float]], default='auto'
+            Drift threshold definition. Use 'auto' for automatic thresholds or
             provide custom (lower, upper) bounds.
         method : str, default='expanding'
-            Comparison method to use:
-            - 'expanding': Each point compared against all accumulated past data
-            - 'rolling': Each point compared against a fixed-size rolling window
+            Comparison method:
+            - 'expanding': Each point compared against accumulated past data
             - 'jackknife': Each point compared against all other points (leave-one-out)
-
-        Attributes
-        ----------
-        func : Callable
-            The distance function used for drift calculation.
-        reference_distribution : pd.DataFrame
-            Normalized probability distribution of reference categories.
-        reference_distance : pd.Series
-            Calculated distances between reference periods.
-        method : str
-            The comparison method being used.
-        freq : str
-            The frequency parameter for time grouping.
         """
-        self.method = method
-        self.freq = freq
 
-        if self.freq is None:
+        if freq is None:
             raise ValueError("freq must be specified for time grouping.")
 
         if method not in ["expanding", "jackknife"]:
@@ -96,7 +84,38 @@ class CatDrift(BaseModel):
                 f"method must be one of ['expanding', 'jackknife'], got '{method}'"
             )
 
+        self.freq = freq
         self.func = self._selection_function(func)
+        self.drift_limit = drift_limit
+        self.method = method
+        self.reference_distribution = None
+
+    def fit(
+        self,
+        df: pd.DataFrame,
+        id_col: str = "unique_id",
+        time_col: str = "ds",
+        target_col: str = "y",
+    ) -> "CatDrift":
+        """
+        Fit the drift detector to reference data.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Reference dataframe containing categorical data with time series structure.
+        id_col : str, default='unique_id'
+            Column name identifying unique time series entities.
+        time_col : str, default='ds'
+            Column name containing timestamps for time-based grouping.
+        target_col : str, default='y'
+            Column name containing categorical values to analyze for drift.
+
+        Returns
+        -------
+        self : CatDrift
+            Returns self for method chaining.
+        """
 
         frequency = (
             df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq), target_col])[
@@ -105,18 +124,27 @@ class CatDrift(BaseModel):
             .size()
             .unstack(fill_value=0)
         )
-        self.reference_distribution = frequency.groupby([id_col]).sum() / np.sum(
-            frequency.sum(axis=0)
-        )
-        self.reference_distance = self._generate_distance(
+        reference = frequency.groupby([id_col]).sum() / np.sum(frequency.sum(axis=0))
+
+        reference_distance = self._generate_distance(
             frequency,
         )
 
+        self.reference_distribution = {
+            unique_id: {
+                category: round(prob, 4)
+                for category, prob in reference.loc[unique_id].items()
+            }
+            for unique_id in reference.index
+        }
+
         super().__init__(
-            self.reference_distance,
-            drift_limit,
+            reference_distance,
+            self.drift_limit,
             id_col,
         )
+
+        return self
 
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
@@ -218,11 +246,11 @@ class CatDrift(BaseModel):
         results = []
         for unique_id in percent.index.get_level_values(0).unique():
             id_data = percent.loc[unique_id]
-            reference = self.reference_distribution.loc[unique_id]
+            reference = self.reference_distribution[unique_id]
 
-            common_cols = id_data.columns.intersection(reference.index)
+            common_cols = id_data.columns.intersection(reference.keys())
             id_data_aligned = id_data[common_cols]
-            reference_aligned = reference[common_cols]
+            reference_aligned = np.array([reference[col] for col in common_cols])
             distances = np.array(
                 [self.func(row, reference_aligned) for row in id_data_aligned.values]
             )

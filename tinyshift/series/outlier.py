@@ -7,6 +7,7 @@ from typing import Union, List
 import numpy as np
 from tinyshift.stats import StatisticalInterval
 from tinyshift.stats import rolling_window
+import pandas as pd
 
 
 def hampel_filter(
@@ -70,7 +71,7 @@ def hampel_filter(
 
     if rolling_window < 3:
         raise ValueError("rolling_window must be >= 3")
-
+    index = X.index if hasattr(X, "index") else list(range(len(X)))
     X = np.asarray(X, dtype=np.float64)
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
@@ -93,12 +94,12 @@ def hampel_filter(
     thresholds = factor * mads * scale
     is_outlier[center_indices] = np.abs(X[center_indices] - medians) > thresholds
 
-    return is_outlier
+    return pd.Series(is_outlier, index=index)
 
 
 def bollinger_bands(
     X: Union[np.ndarray, List[float]],
-    rolling_window: int = 20,
+    window_size: int = 20,
     center: int = np.mean,
     spread: int = np.std,
     factor: int = 2,
@@ -113,7 +114,7 @@ def bollinger_bands(
     ----------
     X : array-like, shape (n_samples,)
         Time series data (e.g., closing prices).
-    rolling_window : int, optional (default=20)
+    window_size : int, optional (default=20)
         The number of periods to use for calculating the moving average and standard deviation.
     factor : float, optional (default=2)
         The number of standard deviations to use for the upper and lower bands.
@@ -132,7 +133,7 @@ def bollinger_bands(
     - The Bollinger Bands are calculated using a rolling window approach.
     - Outliers are points outside the upper or lower band.
     """
-
+    index = X.index if hasattr(X, "index") else list(range(len(X)))
     X = np.asarray(X, dtype=np.float64)
 
     if X.ndim != 1:
@@ -141,7 +142,7 @@ def bollinger_bands(
     is_outlier = np.zeros(X.shape[0], dtype=bool)
     bounds = rolling_window(
         X,
-        rolling_window=rolling_window,
+        rolling_window=window_size,
         func=StatisticalInterval.calculate_interval,
         center=center,
         spread=spread,
@@ -150,4 +151,4 @@ def bollinger_bands(
 
     is_outlier = np.where((X < bounds[:, 0]) | (X > bounds[:, 1]), True, is_outlier)
 
-    return is_outlier
+    return pd.Series(is_outlier, index=index)

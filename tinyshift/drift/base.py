@@ -8,6 +8,7 @@ from typing import Union, Tuple, List
 import pandas as pd
 from ..stats import StatisticalInterval
 from abc import ABC, abstractmethod
+from typing import Dict
 
 
 class BaseModel(ABC):
@@ -29,8 +30,10 @@ class BaseModel(ABC):
         id_col : str, default "unique_id"
             Column name used for grouping the reference data.
         """
-        self.drift_thresholds_ = reference.groupby(id_col).apply(
-            self._get_drift_threshold, drift_limit
+        self._threshold_cache = (
+            reference.groupby(id_col)
+            .apply(self._get_drift_threshold, drift_limit)
+            .to_dict()
         )
 
     def _get_drift_threshold(
@@ -52,11 +55,23 @@ class BaseModel(ABC):
         """
         return X.index if hasattr(X, "index") else list(range(len(X)))
 
-    def _is_drifted(self, data: pd.Series, group_id: str) -> pd.Series:
+    def _is_drifted(self, df: pd.DataFrame, id_col: str) -> pd.Series:
         """
-        Checks if metrics in the Series are outside the drift threshold for a specific group.
+        Vectorized version of drift detection - much faster than transform + lambda.
         """
-        return data >= self.drift_thresholds_[group_id]
+        mask = np.zeros(len(df), dtype=bool)
+
+        for unique_id, idx in df.groupby(id_col).groups.items():
+            threshold = self._threshold_cache[unique_id]
+            group_metrics = df.loc[idx, "metric"].values
+            mask[idx] = group_metrics >= threshold
+
+        return pd.Series(mask, index=df.index)
+
+    @property
+    def thresholds(self) -> Dict[str, float]:
+        """Get the drift thresholds for each group as dict for faster access."""
+        return self._threshold_cache
 
     @abstractmethod
     def score(
@@ -88,12 +103,5 @@ class BaseModel(ABC):
             target_col,
         )
 
-        metrics["drift"] = metrics.groupby(id_col)["metric"].transform(
-            lambda group_data: self._is_drifted(group_data, group_data.name)
-        )
+        metrics["drift"] = self._is_drifted(metrics, id_col)
         return metrics
-
-    @property
-    def thresholds(self) -> list[tuple[float, float]]:
-        """Get the drift thresholds for each group."""
-        return self.drift_thresholds_
