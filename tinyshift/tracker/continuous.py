@@ -29,8 +29,8 @@ class ConDrift(BaseModel):
         ----------
         df : pd.DataFrame
             Input dataframe containing time series data with multiple entities.
-        freq : str, optional
-            Frequency string for time grouping (e.g., 'D', 'W', 'M'). Default is None.
+        freq : str
+            Frequency string for time grouping (e.g., 'D', 'W', 'M'). Required parameter.
         id_col : str, default='unique_id'
             Column name containing entity identifiers.
         time_col : str, default='ds'
@@ -39,9 +39,9 @@ class ConDrift(BaseModel):
             Column name containing the target continuous values.
         func : str, default='ws'
             Distance function: 'ws' (Wasserstein distance).
-        drift_limit : str or tuple, default='stddev'
+        drift_limit : str or tuple, default='auto'
             Drift threshold definition:
-            - 'stddev': thresholds based on standard deviation of reference metrics
+            - 'auto': automatically determined thresholds based on reference metrics
             - tuple: custom (lower, upper) thresholds
         method : str, default='expanding'
             Comparison method to use:
@@ -50,8 +50,8 @@ class ConDrift(BaseModel):
 
         Attributes
         ----------
-        reference_distribution : pd.DataFrame
-            The reference dataset used as baseline.
+        reference_distribution : dict
+            Dictionary mapping unique_id to reference data arrays used as baseline.
         reference_distance : pd.Series
             Calculated distance metrics for the reference dataset.
         func : Callable
@@ -130,7 +130,6 @@ class ConDrift(BaseModel):
         pd.Series
             Distance metrics indexed by time period. Note:
             - Expanding: First period is dropped (no reference)
-            - Rolling: First (window_size-1) periods are dropped
             - Jackknife: All periods included
         """
         index = self._get_index(X)

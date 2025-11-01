@@ -63,23 +63,20 @@ class CatDrift(BaseModel):
             Column name containing categorical values to track for drift.
         func : str, default='chebyshev'
             Distance metric to use for drift detection.
-        drift_limit : Union[str, Tuple[float, float]], default='stddev'
-            Drift threshold definition. Use 'stddev' for automatic thresholds or
+        drift_limit : Union[str, Tuple[float, float]], default='auto'
+            Drift threshold definition. Use 'auto' for automatic thresholds or
             provide custom (lower, upper) bounds.
         method : str, default='expanding'
             Comparison method to use:
             - 'expanding': Each point compared against all accumulated past data
-            - 'rolling': Each point compared against a fixed-size rolling window
             - 'jackknife': Each point compared against all other points (leave-one-out)
 
         Attributes
         ----------
         func : Callable
             The distance function used for drift calculation.
-        reference_distribution : pd.DataFrame
+        reference_distribution : dict
             Normalized probability distribution of reference categories.
-        reference_distance : pd.Series
-            Calculated distances between reference periods.
         method : str
             The comparison method being used.
         freq : str
