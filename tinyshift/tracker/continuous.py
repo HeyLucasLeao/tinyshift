@@ -73,11 +73,18 @@ class ConDrift(BaseModel):
             )
 
         self.func = self._selection_function(func)
-        self.reference_distribution = df.groupby(
-            [id_col, pd.Grouper(key=time_col, freq=self.freq)]
-        )[target_col].apply(np.asarray)
+        reference = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
+            target_col
+        ].apply(np.asarray)
 
-        reference_distance = self._generate_distance(self.reference_distribution)
+        reference_distance = self._generate_distance(reference)
+
+        self.reference_distribution = {
+            unique_id: np.concatenate(reference.loc[unique_id].values).astype(
+                np.float32
+            )
+            for unique_id in reference.index.get_level_values(0).unique()
+        }
 
         super().__init__(
             reference_distance,
@@ -174,12 +181,11 @@ class ConDrift(BaseModel):
         results = []
         for unique_id in grouped_data.index.get_level_values(0).unique():
             id_data = grouped_data.loc[unique_id]
-            reference_data = self.reference_distribution.loc[unique_id]
-            reference_combined = np.concatenate(reference_data.values)
+            reference_data = self.reference_distribution[unique_id]
 
             distances = np.array(
                 [
-                    self.func(current_data, reference_combined)
+                    self.func(current_data, reference_data)
                     for current_data in id_data.values
                 ]
             )

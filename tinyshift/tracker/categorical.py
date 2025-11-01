@@ -105,13 +105,19 @@ class CatDrift(BaseModel):
             .size()
             .unstack(fill_value=0)
         )
-        self.reference_distribution = frequency.groupby([id_col]).sum() / np.sum(
-            frequency.sum(axis=0)
-        )
+        reference = frequency.groupby([id_col]).sum() / np.sum(frequency.sum(axis=0))
 
         reference_distance = self._generate_distance(
             frequency,
         )
+
+        self.reference_distribution = {
+            unique_id: {
+                category: round(prob, 4)
+                for category, prob in reference.loc[unique_id].items()
+            }
+            for unique_id in reference.index
+        }
 
         super().__init__(
             reference_distance,
@@ -219,11 +225,11 @@ class CatDrift(BaseModel):
         results = []
         for unique_id in percent.index.get_level_values(0).unique():
             id_data = percent.loc[unique_id]
-            reference = self.reference_distribution.loc[unique_id]
+            reference = self.reference_distribution[unique_id]
 
-            common_cols = id_data.columns.intersection(reference.index)
+            common_cols = id_data.columns.intersection(reference.keys())
             id_data_aligned = id_data[common_cols]
-            reference_aligned = reference[common_cols]
+            reference_aligned = np.array([reference[col] for col in common_cols])
             distances = np.array(
                 [self.func(row, reference_aligned) for row in id_data_aligned.values]
             )
