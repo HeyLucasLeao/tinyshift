@@ -88,6 +88,9 @@ class CatDrift(BaseModel):
         self.method = method
         self.freq = freq
 
+        if self.freq is None:
+            raise ValueError("freq must be specified for time grouping.")
+
         if method not in ["expanding", "jackknife"]:
             raise ValueError(
                 f"method must be one of ['expanding', 'jackknife'], got '{method}'"
