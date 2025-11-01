@@ -86,7 +86,7 @@ class ConDrift(BaseModel):
             id_col,
         )
 
-    def _wasserstein(self, a, b):
+    def _wasserstein(self, a: np.ndarray, b: np.ndarray) -> float:
         """Calculate the Wasserstein Distance."""
         return wasserstein_distance(a, b)
 
