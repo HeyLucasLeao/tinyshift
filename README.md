@@ -247,13 +247,11 @@ tinyshift
 │   │   ├── test.pca.py
 │   │   ├── test_hbos.py
 │   │   └── test_spad.py
-│   └── tracker
+│   └── drift
 │       ├── __init__.py
-│       ├── anomaly.py
 │       ├── base.py
 │       ├── categorical.py
 │       ├── continuous.py
-│       └── performance.py
 ```
 
 
