@@ -7,6 +7,8 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.utils import check_array
 from sklearn.base import BaseEstimator
+from typing import Union, List
+import pandas as pd
 
 
 class PCAReconstructionError(BaseEstimator):
@@ -35,6 +37,12 @@ class PCAReconstructionError(BaseEstimator):
     def __init__(self) -> None:
         self.PCA = None
         self.decision_scores_: np.ndarray = None
+
+    def _get_index(self, X: Union[pd.Series, List[np.ndarray], List[list]]):
+        """
+        Helper function to retrieve the index of a pandas Series or generate a default index.
+        """
+        return X.index if hasattr(X, "index") else list(range(len(X)))
 
     def _calculate_reconstruction_error(
         self, original: np.ndarray, reconstructed: np.ndarray
@@ -130,8 +138,8 @@ class PCAReconstructionError(BaseEstimator):
 
         if self.PCA is None:
             raise ValueError("Model must be fitted before prediction.")
-
+        index = self._get_index(X)
         X = check_array(X)
         scores = self.decision_function(X)
         threshold = np.quantile(self.decision_scores_, quantile, method="higher")
-        return scores > threshold
+        return pd.Series(scores > threshold, index=index)

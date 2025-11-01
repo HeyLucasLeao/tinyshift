@@ -192,7 +192,7 @@ def seasonal_decompose(
     return fig.show(fig_type)
 
 
-def stationarity_check(
+def stationarity_analysis(
     df: Union[pd.DataFrame, pd.Series],
     height: int = 1200,
     width: int = 1300,
@@ -370,7 +370,7 @@ def stationarity_check(
     return fig.show(fig_type)
 
 
-def residual_check(
+def residual_analysis(
     df: Union[pd.DataFrame, pd.Series],
     height: int = 1200,
     width: int = 1300,

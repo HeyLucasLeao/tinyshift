@@ -6,7 +6,8 @@
 from typing import Union, List
 import numpy as np
 from tinyshift.stats import StatisticalInterval
-from tinyshift.stats import trailing_window
+from tinyshift.stats import rolling_window
+import pandas as pd
 
 
 def hampel_filter(
@@ -70,36 +71,35 @@ def hampel_filter(
 
     if rolling_window < 3:
         raise ValueError("rolling_window must be >= 3")
-    if rolling_window % 2 == 0:
-        raise ValueError("rolling_window must be odd")
-
+    index = X.index if hasattr(X, "index") else list(range(len(X)))
     X = np.asarray(X, dtype=np.float64)
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
 
-    is_outlier = np.zeros(X.shape[0], dtype=bool)
-    half_window = rolling_window // 2
-    center_indices = range(half_window, X.shape[0] - half_window)
+    n_samples = X.shape[0]
+    is_outlier = np.zeros(n_samples, dtype=bool)
 
-    window_indices = [
-        np.arange(i - half_window, i + half_window + 1) for i in center_indices
-    ]
+    start_index = rolling_window - 1
+    center_indices = np.arange(start_index, n_samples)
+    offsets = np.arange(-rolling_window + 1, 1)
+    window_indices = center_indices[:, None] + offsets[None, :]
+
+    if window_indices.shape[0] == 0:
+        return is_outlier
+
     windows = X[window_indices]
 
     medians = np.median(windows, axis=1)
     mads = np.median(np.abs(windows - medians[:, None]), axis=1)
     thresholds = factor * mads * scale
+    is_outlier[center_indices] = np.abs(X[center_indices] - medians) > thresholds
 
-    for i, idx in enumerate(center_indices):
-        if abs(X[idx] - medians[i]) > thresholds[i]:
-            is_outlier[idx] = True
-
-    return is_outlier
+    return pd.Series(is_outlier, index=index)
 
 
 def bollinger_bands(
     X: Union[np.ndarray, List[float]],
-    rolling_window: int = 20,
+    window_size: int = 20,
     center: int = np.mean,
     spread: int = np.std,
     factor: int = 2,
@@ -114,7 +114,7 @@ def bollinger_bands(
     ----------
     X : array-like, shape (n_samples,)
         Time series data (e.g., closing prices).
-    rolling_window : int, optional (default=20)
+    window_size : int, optional (default=20)
         The number of periods to use for calculating the moving average and standard deviation.
     factor : float, optional (default=2)
         The number of standard deviations to use for the upper and lower bands.
@@ -133,16 +133,16 @@ def bollinger_bands(
     - The Bollinger Bands are calculated using a rolling window approach.
     - Outliers are points outside the upper or lower band.
     """
-
+    index = X.index if hasattr(X, "index") else list(range(len(X)))
     X = np.asarray(X, dtype=np.float64)
 
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
 
     is_outlier = np.zeros(X.shape[0], dtype=bool)
-    bounds = trailing_window(
+    bounds = rolling_window(
         X,
-        rolling_window=rolling_window,
+        rolling_window=window_size,
         func=StatisticalInterval.calculate_interval,
         center=center,
         spread=spread,
@@ -151,4 +151,4 @@ def bollinger_bands(
 
     is_outlier = np.where((X < bounds[:, 0]) | (X > bounds[:, 1]), True, is_outlier)
 
-    return is_outlier
+    return pd.Series(is_outlier, index=index)

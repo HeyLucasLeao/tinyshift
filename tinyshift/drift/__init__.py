@@ -2,6 +2,5 @@
 # tinyshift - A small toolbox for mlops
 # Licensed under the MIT License
 
-
-from .correlation import *
-from .diagnostic import *
+from .continuous import *
+from .categorical import *
