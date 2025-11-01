@@ -4,4 +4,3 @@
 
 from .continuous import *
 from .categorical import *
-from .base import *

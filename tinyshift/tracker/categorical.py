@@ -8,31 +8,6 @@ import pandas as pd
 from scipy.spatial.distance import jensenshannon
 from .base import BaseModel
 from typing import Callable, Tuple, Union, List
-from collections import Counter
-
-
-def chebyshev(a, b):
-    """
-    Compute the Chebyshev distance between two distributions.
-    """
-    return np.max(np.abs(a - b))
-
-
-def psi(observed, expected, epsilon=1e-4):
-    """
-    Calculate Population Stability Index (PSI) between two distributions.
-    """
-    observed = np.clip(observed, epsilon, 1)
-    expected = np.clip(expected, epsilon, 1)
-    return np.sum((observed - expected) * np.log(observed / expected))
-
-
-import numpy as np
-import pandas as pd
-from scipy.spatial.distance import jensenshannon
-from tinyshift.tracker.base import BaseModel
-from typing import Callable, Tuple, Union, List
-from collections import Counter
 
 
 def chebyshev(a, b):
@@ -60,7 +35,7 @@ class CatDrift(BaseModel):
         time_col: str = "ds",
         target_col: str = "y",
         func: str = "chebyshev",
-        drift_limit: Union[str, Tuple[float, float]] = "stddev",
+        drift_limit: Union[str, Tuple[float, float]] = "auto",
         method: str = "expanding",
     ):
         """
@@ -239,7 +214,7 @@ class CatDrift(BaseModel):
 
         return (
             percent.groupby([id_col, time_col])
-            .apply(lambda row: self.func(row, self.reference_distribution))
+            .apply(lambda row: self.func(row, self.reference_distribution[row.name[0]]))
             .rename("metric")
             .reset_index()
         )

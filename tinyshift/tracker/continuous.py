@@ -19,7 +19,7 @@ class ConDrift(BaseModel):
         time_col: str = "ds",
         target_col: str = "y",
         func: str = "ws",
-        drift_limit: Union[str, Tuple[float, float]] = "stddev",
+        drift_limit: Union[str, Tuple[float, float]] = "auto",
         method: str = "expanding",
     ):
         """
@@ -74,11 +74,11 @@ class ConDrift(BaseModel):
 
         self.func = func
         self.func = self._selection_function(func)
-        self.reference_distribution = df
-
-        self.reference_distance = df.groupby(
+        self.reference_distribution = df.groupby(
             [id_col, pd.Grouper(key=time_col, freq=self.freq)]
-        )[target_col].apply(self._generate_distance)
+        )[target_col].apply(np.asarray)
+
+        self.reference_distance = self._generate_distance(self.reference_distribution)
 
         super().__init__(
             self.reference_distance,
@@ -139,11 +139,10 @@ class ConDrift(BaseModel):
 
     def _expanding_distance(self, X: np.ndarray, index) -> pd.Series:
         """Compute distances using expanding window approach."""
-        n = len(X)
-        distances = np.zeros(n)
+        distances = np.zeros(X.shape[0])
 
         past_value = np.array([], dtype=float)
-        for i in range(1, n):
+        for i in range(1, X.shape[0]):
             past_value = np.concatenate([past_value, X[i - 1]])
             distances[i] = self.func(past_value, X[i])
 
@@ -151,10 +150,9 @@ class ConDrift(BaseModel):
 
     def _jackknife_distance(self, X: np.ndarray, index) -> pd.Series:
         """Compute distances using jackknife (leave-one-out) approach."""
-        n = len(X)
-        distances = np.zeros(n)
+        distances = np.zeros(X.shape[0])
 
-        for i in range(n):
+        for i in range(X.shape[0]):
             past_value = np.concatenate(np.delete(np.asarray(X), i, axis=0))
             distances[i] = self.func(past_value, X[i])
 
@@ -162,13 +160,25 @@ class ConDrift(BaseModel):
 
     def score(
         self,
-        X: Union[pd.Series, List[np.ndarray], List[list]],
+        df: pd.DataFrame,
+        id_col: str = "unique_id",
+        time_col: str = "ds",
+        target_col: str = "y",
     ) -> pd.Series:
         """
         Compute the drift metric between the reference distribution and new data points.
         """
-        reference = np.concatenate(np.asarray(self.reference_distribution))
-        index = self._get_index(X)
-        X = np.asarray(X)
+        reference = (
+            self.reference_distribution.groupby(id_col)
+            .apply(lambda x: np.concatenate(x.values))
+            .rename("reference")
+        )
+        distribution = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
+            target_col
+        ]
 
-        return pd.Series([self.func(reference, row) for row in X], index=index)
+        return (
+            distribution.apply(lambda row: self.func(row, reference[row.name[0]]))
+            .rename("metric")
+            .reset_index()
+        )
