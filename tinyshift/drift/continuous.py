@@ -8,63 +8,62 @@ import pandas as pd
 from scipy.stats import wasserstein_distance
 from .base import BaseModel
 from typing import Callable, Tuple, Union, List
+from sklearn.base import BaseEstimator
 
 
-class ConDrift(BaseModel):
+class ConDrift(BaseModel, BaseEstimator):
+    """
+    A tracker for identifying drift in continuous data over time.
+
+    The tracker uses a reference dataset to compute a baseline distribution and compares
+    subsequent data for deviations based on a distance metric and drift limits.
+
+    Available distance metrics:
+    - 'ws': Wasserstein distance (Earth Mover's Distance) - measures the minimum cost
+      to transform one distribution into another
+
+    Comparison methods:
+    - 'expanding': Each point compared against all accumulated past data
+    - 'jackknife': Each point compared against all other points (leave-one-out)
+
+    Attributes
+    ----------
+    func : Callable
+        The distance function used for drift calculation.
+    reference_distribution : dict
+        Dictionary mapping unique_id to reference data arrays used as baseline.
+    method : str
+        The comparison method being used.
+    freq : str
+        The frequency parameter for time grouping.
+    """
+
     def __init__(
         self,
-        df: pd.DataFrame,
         freq: str = None,
-        id_col: str = "unique_id",
-        time_col: str = "ds",
-        target_col: str = "y",
         func: str = "ws",
         drift_limit: Union[str, Tuple[float, float]] = "auto",
         method: str = "expanding",
     ):
         """
-        A Tracker for identifying drift in continuous data over time using statistical distance metrics.
+        Initialize the continuous drift detector.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            Input dataframe containing time series data with multiple entities.
         freq : str
-            Frequency string for time grouping (e.g., 'D', 'W', 'M'). Required parameter.
-        id_col : str, default='unique_id'
-            Column name containing entity identifiers.
-        time_col : str, default='ds'
-            Column name containing timestamps.
-        target_col : str, default='y'
-            Column name containing the target continuous values.
+            Frequency for time grouping (e.g., 'D', 'W', 'M'). Required for time-based analysis.
         func : str, default='ws'
-            Distance function: 'ws' (Wasserstein distance).
-        drift_limit : str or tuple, default='auto'
-            Drift threshold definition:
-            - 'auto': automatically determined thresholds based on reference metrics
-            - tuple: custom (lower, upper) thresholds
+            Distance metric to use for drift detection. Options: 'ws' (Wasserstein distance).
+        drift_limit : Union[str, Tuple[float, float]], default='auto'
+            Drift threshold definition. Use 'auto' for automatic thresholds or
+            provide custom (lower, upper) bounds.
         method : str, default='expanding'
-            Comparison method to use:
-            - 'expanding': Each point compared against all accumulated past data
+            Comparison method:
+            - 'expanding': Each point compared against accumulated past data
             - 'jackknife': Each point compared against all other points (leave-one-out)
-
-        Attributes
-        ----------
-        reference_distribution : dict
-            Dictionary mapping unique_id to reference data arrays used as baseline.
-        reference_distance : pd.Series
-            Calculated distance metrics for the reference dataset.
-        func : Callable
-            The selected distance function.
-        method : str
-            The comparison method being used.
-        freq : str
-            The frequency string for time grouping.
         """
-        self.method = method
-        self.freq = freq
 
-        if self.freq is None:
+        if freq is None:
             raise ValueError("freq must be specified for time grouping.")
 
         if method not in ["expanding", "jackknife"]:
@@ -72,7 +71,39 @@ class ConDrift(BaseModel):
                 f"method must be one of ['expanding', 'jackknife'], got '{method}'"
             )
 
+        self.freq = freq
         self.func = self._selection_function(func)
+        self.drift_limit = drift_limit
+        self.method = method
+        self.reference_distribution = None
+
+    def fit(
+        self,
+        df: pd.DataFrame,
+        id_col: str = "unique_id",
+        time_col: str = "ds",
+        target_col: str = "y",
+    ) -> "ConDrift":
+        """
+        Fit the drift detector to reference data.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Reference dataframe containing continuous data with time series structure.
+        id_col : str, default='unique_id'
+            Column name identifying unique time series entities.
+        time_col : str, default='ds'
+            Column name containing timestamps for time-based grouping.
+        target_col : str, default='y'
+            Column name containing continuous values to analyze for drift.
+
+        Returns
+        -------
+        self : ConDrift
+            Returns self for method chaining.
+        """
+
         reference = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
             target_col
         ].apply(np.asarray)
@@ -88,19 +119,17 @@ class ConDrift(BaseModel):
 
         super().__init__(
             reference_distance,
-            drift_limit,
+            self.drift_limit,
             id_col,
         )
 
-    def _wasserstein(self, a: np.ndarray, b: np.ndarray) -> float:
-        """Calculate the Wasserstein Distance."""
-        return wasserstein_distance(a, b)
+        return self
 
     def _selection_function(self, func_name: str) -> Callable:
         """Returns a specific function based on the given function name."""
 
         if func_name == "ws":
-            selected_func = self._wasserstein
+            selected_func = wasserstein_distance
         else:
             raise ValueError(f"Unsupported function: {func_name}")
         return selected_func
