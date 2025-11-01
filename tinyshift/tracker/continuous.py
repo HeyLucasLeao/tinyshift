@@ -72,16 +72,15 @@ class ConDrift(BaseModel):
                 f"method must be one of ['expanding', 'jackknife'], got '{method}'"
             )
 
-        self.func = func
         self.func = self._selection_function(func)
         self.reference_distribution = df.groupby(
             [id_col, pd.Grouper(key=time_col, freq=self.freq)]
         )[target_col].apply(np.asarray)
 
-        self.reference_distance = self._generate_distance(self.reference_distribution)
+        reference_distance = self._generate_distance(self.reference_distribution)
 
         super().__init__(
-            self.reference_distance,
+            reference_distance,
             drift_limit,
             id_col,
         )

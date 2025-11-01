@@ -108,12 +108,13 @@ class CatDrift(BaseModel):
         self.reference_distribution = frequency.groupby([id_col]).sum() / np.sum(
             frequency.sum(axis=0)
         )
-        self.reference_distance = self._generate_distance(
+
+        reference_distance = self._generate_distance(
             frequency,
         )
 
         super().__init__(
-            self.reference_distance,
+            reference_distance,
             drift_limit,
             id_col,
         )
