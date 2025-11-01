@@ -215,9 +215,25 @@ class CatDrift(BaseModel):
         )
         percent = frequency.div(frequency.sum(axis=1), axis=0)
 
-        return (
-            percent.groupby([id_col, time_col])
-            .apply(lambda row: self.func(row, self.reference_distribution[row.name[0]]))
-            .rename("metric")
-            .reset_index()
-        )
+        results = []
+        for unique_id in percent.index.get_level_values(0).unique():
+            id_data = percent.loc[unique_id]
+            reference = self.reference_distribution.loc[unique_id]
+
+            common_cols = id_data.columns.intersection(reference.index)
+            id_data_aligned = id_data[common_cols]
+            reference_aligned = reference[common_cols]
+            distances = np.array(
+                [self.func(row, reference_aligned) for row in id_data_aligned.values]
+            )
+
+            result_df = pd.DataFrame(
+                {
+                    id_col: unique_id,
+                    time_col: id_data_aligned.index,
+                    "metric": distances,
+                }
+            )
+            results.append(result_df)
+
+        return pd.concat(results, ignore_index=True)

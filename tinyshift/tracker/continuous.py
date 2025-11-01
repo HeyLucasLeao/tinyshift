@@ -168,17 +168,30 @@ class ConDrift(BaseModel):
         """
         Compute the drift metric between the reference distribution and new data points.
         """
-        reference = (
-            self.reference_distribution.groupby(id_col)
-            .apply(lambda x: np.concatenate(x.values))
-            .rename("reference")
-        )
-        distribution = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
+        grouped_data = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
             target_col
-        ]
+        ].apply(np.asarray)
 
-        return (
-            distribution.apply(lambda row: self.func(row, reference[row.name[0]]))
-            .rename("metric")
-            .reset_index()
-        )
+        results = []
+        for unique_id in grouped_data.index.get_level_values(0).unique():
+            id_data = grouped_data.loc[unique_id]
+            reference_data = self.reference_distribution.loc[unique_id]
+            reference_combined = np.concatenate(reference_data.values)
+
+            distances = np.array(
+                [
+                    self.func(current_data, reference_combined)
+                    for current_data in id_data.values
+                ]
+            )
+
+            result_df = pd.DataFrame(
+                {
+                    id_col: unique_id,
+                    time_col: id_data.index,
+                    "metric": distances,
+                }
+            )
+            results.append(result_df)
+
+        return pd.concat(results, ignore_index=True)
