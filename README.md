@@ -1,5 +1,7 @@
 # TinyShift
-
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/34668d33-459d-4dc3-b598-342130bf7db3" alt="tinyshift_full_logo" width="400" height="400">
+</p>
 **TinyShift** is a lightweight, sklearn-compatible Python library designed for **data drift detection**, **outlier identification**, and **MLOps monitoring** in production machine learning systems. The library provides modular, easy-to-use tools for detecting when data distributions or model performance change over time, with comprehensive visualization capabilities.
 
 For enterprise-grade solutions, consider [Nannyml](https://github.com/NannyML/nannyml).
