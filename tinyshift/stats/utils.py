@@ -54,7 +54,7 @@ def chebyshev_guaranteed_percentage(
 
 def rolling_window(
     X: Union[np.ndarray, List[float]],
-    rolling_window: int = 60,
+    window_size: int = 60,
     func: Callable = None,
     **kwargs,
 ) -> np.ndarray:
@@ -65,7 +65,7 @@ def rolling_window(
     ----------
     X : array-like, shape (n_samples,)
         1D time series data (e.g., log-prices).
-    rolling_window : int, optional (default=60)
+    window_size : int, optional (default=60)
         Size of the rolling window (must be >= 3).
     func : Callable
         Function to apply to each window. Must accept a 1D array as first argument.
@@ -74,11 +74,11 @@ def rolling_window(
 
     Returns
     -------
-    result : ndarray, shape (n_samples - rolling_window + 1,)
+    result : ndarray, shape (n_samples - window_size + 1,)
         Array of function values for each rolling window.
     """
-    if rolling_window < 2:
-        raise ValueError("rolling_window must be >= 2")
+    if window_size < 2:
+        raise ValueError("window_size must be >= 2")
 
     X = np.asarray(X, dtype=np.float64)
 
@@ -86,18 +86,21 @@ def rolling_window(
         raise ValueError("Input data must be 1-dimensional")
 
     window_indices = [
-        np.arange(i, i + rolling_window) for i in range(X.shape[0] - rolling_window + 1)
+        np.arange(i, i + window_size) for i in range(X.shape[0] - window_size + 1)
     ]
 
     windows = X[window_indices]
 
     result = np.array([func(window, **kwargs) for window in windows])
 
-    return np.concatenate(([result[0]] * (rolling_window - 1), result))
+    return np.concatenate(([result[0]] * (window_size - 1), result))
 
 
 def expanding_window(
-    X: Union[np.ndarray, List[float]], func: Callable = None, **kwargs
+    X: Union[np.ndarray, List[float]],
+    func: Callable = None,
+    window_size: int = 1,
+    **kwargs,
 ) -> np.ndarray:
     """
     Apply a function over an expanding window of a 1D time series.
@@ -108,26 +111,42 @@ def expanding_window(
         1D time series data (e.g., log-prices).
     func : Callable
         Function to apply to each window. Must accept a 1D array as first argument.
+    window_size : int, optional (default=1)
+        Minimum window size to start the expansion. The first window will contain
+        `window_size` elements, and subsequent windows will expand by one element each.
     **kwargs
         Additional keyword arguments to pass to `func`.
 
     Returns
     -------
-    result : ndarray, shape (n_samples,)
-        Array of function values for each expanding window.
+    result : ndarray, shape (n_samples - window_size + 1,)
+        Array of function values for each expanding window, starting from `window_size`.
     """
     X = np.asarray(X, dtype=np.float64)
 
     if X.ndim != 1:
         raise ValueError("Input data must be 1-dimensional")
 
-    result = np.array([func(X[: i + 1], **kwargs) for i in range(X.shape[0])])
+    if window_size < 1:
+        raise ValueError("window_size must be >= 1")
 
-    return result
+    if window_size > len(X):
+        raise ValueError("window_size cannot be larger than the length of X")
+
+    result = np.array(
+        [
+            func(X[: window_size + i], **kwargs)
+            for i in range(X.shape[0] - window_size + 1)
+        ]
+    )
+
+    return np.concatenate(([result[0]] * (window_size - 1), result))
 
 
 def jacknife(
-    X: Union[np.ndarray, List[float]], func: Callable = None, **kwargs
+    X: Union[np.ndarray, List[float]],
+    func: Callable = None,
+    **kwargs,
 ) -> np.ndarray:
     """
     Apply a function using the jackknife approach on a 1D time series.

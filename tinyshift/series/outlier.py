@@ -142,7 +142,7 @@ def bollinger_bands(
     is_outlier = np.zeros(X.shape[0], dtype=bool)
     bounds = rolling_window(
         X,
-        rolling_window=window_size,
+        window_size=window_size,
         func=StatisticalInterval.calculate_interval,
         center=center,
         spread=spread,

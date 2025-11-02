@@ -103,6 +103,7 @@ class ConDrift(BaseModel, BaseEstimator):
         self : ConDrift
             Returns self for method chaining.
         """
+        self._check_dataframe(df, time_col, target_col, id_col)
 
         reference = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
             target_col
@@ -202,6 +203,8 @@ class ConDrift(BaseModel, BaseEstimator):
         """
         Compute the drift metric between the reference distribution and new data points.
         """
+        self._check_dataframe(df, time_col, target_col, id_col)
+
         grouped_data = df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq)])[
             target_col
         ].apply(np.asarray)

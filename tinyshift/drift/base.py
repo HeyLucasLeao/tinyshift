@@ -36,6 +36,23 @@ class BaseModel(ABC):
             .to_dict()
         )
 
+    def _check_dataframe(
+        self, df: pd.DataFrame, time_col: str, target_col: str, id_col: str
+    ):
+        """
+        Validate the input DataFrame for required columns and types.
+        """
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError("Input data must be a pandas DataFrame.")
+        if time_col not in df.columns:
+            raise ValueError(f"time_col '{time_col}' not found in DataFrame.")
+        if target_col not in df.columns:
+            raise ValueError(f"target_col '{target_col}' not found in DataFrame.")
+        if id_col not in df.columns:
+            raise ValueError(f"id_col '{id_col}' not found in DataFrame.")
+        if not pd.api.types.is_datetime64_any_dtype(df[time_col]):
+            raise ValueError(f"time_col '{time_col}' must be datetime.")
+
     def _get_drift_threshold(
         self,
         reference_metrics: pd.Series,

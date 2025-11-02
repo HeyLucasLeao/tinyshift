@@ -116,6 +116,7 @@ class CatDrift(BaseModel, BaseEstimator):
         self : CatDrift
             Returns self for method chaining.
         """
+        self._check_dataframe(df, time_col, target_col, id_col)
 
         frequency = (
             df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq), target_col])[
@@ -234,6 +235,8 @@ class CatDrift(BaseModel, BaseEstimator):
         """
         Compute the drift metric between the reference distribution and new data points.
         """
+        self._check_dataframe(df, time_col, target_col, id_col)
+
         frequency = (
             df.groupby([id_col, pd.Grouper(key=time_col, freq=self.freq), target_col])[
                 target_col
