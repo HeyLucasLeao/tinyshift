@@ -246,9 +246,11 @@ confidence_interval = bootstrap_bca_interval(
 ```
 tinyshift/
 ├── association_mining/          # Market basket analysis tools
+│   └── README.md              # Module documentation
 │   ├── analyzer.py             # Transaction pattern analysis
 │   └── encoder.py              # Data encoder
 ├── drift/                      # Data drift detection 
+│   └── README.md              # Module documentation
 │   ├── base.py                 # Base drift detection classes  
 │   ├── categorical.py          # CatDrift for categorical features
 │   └── continuous.py           # ConDrift for numerical features
@@ -265,6 +267,7 @@ tinyshift/
 │   ├── residualizer.py        # Residualizer Feature
 │   └── scaler.py              # Custom scaling transformations
 ├── outlier/                    # Outlier detection algorithms
+│   └── README.md              # Module documentation
 │   ├── base.py                 # Base outlier detection classes
 │   ├── hbos.py                 # Histogram-Based Outlier Score
 │   ├── pca.py                  # PCA-based outlier detection  
@@ -274,6 +277,7 @@ tinyshift/
 │   ├── correlation.py          # Correlation analysis plots
 │   └── diagnostic.py           # Time series diagnostics plots
 ├── series/                     # Time series analysis tools
+│   └── README.md              # Module documentation
 │   ├── forecastability.py     # Forecast quality and complexity metrics
 │   ├── interpolation.py       # Forecast stabilization methods
 │   ├── outlier.py             # Time series outlier detection
