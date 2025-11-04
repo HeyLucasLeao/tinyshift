@@ -218,21 +218,21 @@ def sample_entropy(
     return sampen
 
 
-def stability_index(
+def regularity_index(
     X: Union[np.ndarray, List[float]],
     m: int = 1,
     tolerance=None,
     detrend: bool = False,
 ) -> float:
     """
-    Calculate the Stability Index based on Sample Entropy (SampEn).
+    Calculate the Regularity Index based on Sample Entropy (SampEn).
 
-    This function measures the temporal stability and regularity of a time series by
+    This function measures the temporal regularity and predictability of a time series by
     inverting the Sample Entropy. It quantifies how consistent the values and patterns
     are over time, considering both magnitude and sequential relationships.
 
-    The stability is computed as: 1 / exp(SampEn), where higher values indicate
-    more stable and predictable behavior.
+    The regularity is computed as: 1 / exp(SampEn), where higher values indicate
+    more regular and predictable behavior.
 
     Parameters
     ----------
@@ -248,9 +248,9 @@ def stability_index(
     Returns
     -------
     float
-        The Stability Index, where:
-        - Values close to 1: High stability/regularity (consistent patterns)
-        - Values close to 0: Low stability/regularity (irregular/complex behavior)
+        The Regularity Index, where:
+        - Values close to 1: High regularity/predictability (consistent patterns)
+        - Values close to 0: Low regularity/predictability (irregular/complex behavior)
 
     Notes
     -----
