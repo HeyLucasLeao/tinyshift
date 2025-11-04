@@ -6,3 +6,5 @@
 from .outlier import *
 from .forecastability import *
 from .stats import *
+from .stability import *
+from .interpolation import *
