@@ -5,6 +5,7 @@
 
 import numpy as np
 from typing import Union, List, Callable
+import pandas as pd
 
 
 def chebyshev_guaranteed_percentage(
