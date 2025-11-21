@@ -12,7 +12,10 @@ import pandas as pd
 
 
 def corr_heatmap(
-    X: np.ndarray, width: int = 1600, height: int = 1600, fig_type: Optional[str] = None
+    X: np.ndarray,
+    width: int = 1600,
+    height: int = 1600,
+    fig_type: Optional[str] = None,
 ) -> go.Figure:
     """
     Generate an interactive correlation heatmap for a DataFrame using Plotly Express.
@@ -20,7 +23,7 @@ def corr_heatmap(
     This function visualizes the correlation matrix between all numeric columns in the DataFrame,
     with values displayed on each cell and a diverging color scale (blue for negative, red for positive correlations).
 
-    Parameters:
+    Parameters
     -----------
     df : np.ndarray
         A matrix containing numeric columns to compute correlations.
@@ -34,12 +37,12 @@ def corr_heatmap(
         Common options: None (default), 'notebook', or other Plotly-supported renderers.
         (default: None)
 
-    Returns:
+    Returns
     --------
     None
         Displays the heatmap directly.
 
-    Examples:
+    Examples
     --------
     >>> # Basic usage with default size
     >>> corr_heatmap(df)
@@ -50,7 +53,7 @@ def corr_heatmap(
     >>> # For Jupyter notebook display
     >>> corr_heatmap(df, fig_type='notebook')
 
-    Notes:
+    Notes
     ------
     - The correlation matrix is computed using pandas.DataFrame.corr() (Pearson correlation)
     - The color scale ranges from -1 (perfect negative correlation) to +1 (perfect positive correlation)
