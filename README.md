@@ -11,6 +11,7 @@ For enterprise-grade solutions, consider [Nannyml](https://github.com/NannyML/na
 
 - **Data Drift Detection**: Categorical and continuous data drift monitoring with multiple distance metrics
 - **Outlier Detection**: **HBOS**, **PCA-based** and **SPAD** outlier detection algorithms  
+- **Classification Model Evaluation**: Calibration curves, confusion matrices, score distributions, and production confidence analysis
 - **Time Series Analysis**: Seasonality decomposition, trend analysis, forecasting diagnostics, and forecast stabilization
 - **Forecast Stability**: Metrics and interpolation methods for stable forecasting
 
@@ -122,7 +123,45 @@ pca_detector = PCAReconstructionError()
 pca_detector.fit(X_train)
 pca_scores = pca_detector.predict(X_test)
 ```
-### 4. Time Series Analysis and Diagnostics
+### 4. Binary Classification Model Evaluation
+
+Evaluate and visualize classification model performance for production deployment:
+
+```python
+from tinyshift.plot import (
+    reliability_curve,
+    score_distribution, 
+    confusion_matrix,
+    efficiency_curve,
+    beta_confidence_analysis
+)
+
+# Model calibration assessment
+reliability_curve(
+    clf=classifier,
+    X=X_test,
+    y=y_test,
+    model_name="RandomForestClassifier",
+    n_bins=15
+)
+
+# Analyze prediction confidence patterns
+score_distribution(clf, X_test, nbins=20)
+
+# Performance evaluation with interactive confusion matrix
+confusion_matrix(clf, X_test, y_test, percentage_by_class=True)
+
+# Conformal prediction analysis
+efficiency_curve(conformal_classifier, X_test)
+
+# Production deployment confidence analysis
+beta_confidence_analysis(
+    alpha=95, 
+    beta_param=5, 
+    fig_type=None
+)
+```
+### 5. Time Series Analysis and Diagnostics
 
 TinyShift provides comprehensive time series analysis capabilities:
 
@@ -178,7 +217,7 @@ from tinyshift.plot import pami
 pami(time_series, nlags=20, m=3, delay=1, normalize=False)
 ```
 
-### 5. Forecast Stability and Interpolation
+### 6. Forecast Stability and Interpolation
 
 TinyShift includes forecast stability metrics and interpolation methods:
 
@@ -209,7 +248,7 @@ smooth_forecast = hpi(y_hat, w_s=0.4)
 fully_stable_forecast = hfi(y_hat, w_s=0.5)
 ```
 
-### 6. Advanced Modeling Tools
+### 7. Advanced Modeling Tools
 
 ```python
 from tinyshift.modelling import filter_features_by_vif
@@ -274,6 +313,7 @@ tinyshift/
 │   └── spad.py                 # Simple Probabilistic Anomaly Detector
 ├── plot/                       # Visualization capabilities  
 │   ├── README.md              # Module documentation
+│   ├── calibration.py          # Binary Classification model evaluation plots
 │   ├── correlation.py          # Correlation analysis plots
 │   └── diagnostic.py           # Time series diagnostics plots
 ├── series/                     # Time series analysis tools

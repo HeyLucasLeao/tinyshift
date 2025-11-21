@@ -126,28 +126,33 @@ efficiency_curve(
 
 #### **Statistical Distributions**
 
-#### **`beta_pdf_with_cdf_fill`**
-Plots Beta distribution PDF with filled area, useful for Bayesian analysis and calibration studies.
+#### **`beta_confidence_analysis`**
+Analyzes model confidence for production deployment using Beta distribution visualization to assess model reliability.
 
 ```python
-from tinyshift.plot import beta_pdf_with_cdf_fill
+from tinyshift.plot import beta_confidence_analysis
 
-beta_pdf_with_cdf_fill(
-    alpha=2,
-    beta_param=5,
+# High confidence model (many successes, few failures)
+beta_confidence_analysis(
+    alpha=95,  # successes/correct predictions
+    beta_param=5,  # failures/incorrect predictions
     fig_type=None
 )
+
+# Low confidence model (few successes, many failures)
+beta_confidence_analysis(alpha=15, beta_param=85)
 ```
 
 **Parameters:**
-- `alpha`: Alpha (α) parameter of Beta distribution (must be positive)
-- `beta_param`: Beta (β) parameter of Beta distribution (must be positive)
+- `alpha`: Model successes/correct predictions (must be positive)
+- `beta_param`: Model failures/incorrect predictions (must be positive)
 - `fig_type`: Display renderer (default: None)
 
 **When to use:**
-- Visualize prior/posterior distributions in Bayesian analysis
-- Understand Beta distribution shapes for different parameters
-- Educational purposes for probability distributions
+- Assess model readiness for production deployment
+- Evaluate deployment confidence based on success/failure ratio
+- Visualize risk assessment for MLOps decision making
+- Compare model reliability across different validation periods
 
 ---
 
@@ -315,7 +320,7 @@ pami(
 | **`score_distribution`** | Confidence pattern analysis | Classifier + features | Score histogram | Identify over/underconfident predictions |
 | **`confusion_matrix`** | Classification performance | Classifier + test data | Interactive heatmap | Analyze class-specific errors |
 | **`efficiency_curve`** | Conformal prediction trade-offs | Conformal classifier | Efficiency vs validity | Optimize prediction set performance |
-| **`beta_confidence_analysis`** | Distribution visualization | Alpha/beta parameters | PDF plot | Bayesian analysis, calibration theory |
+| **`beta_confidence_analysis`** | Production confidence assessment | Alpha/beta parameters | PDF plot | Evaluate model deployment readiness |
 
 ### Time Series & Correlation Analysis
 
@@ -341,6 +346,9 @@ score_distribution(clf, X_test)
 
 # 3. Performance evaluation
 confusion_matrix(clf, X_test, y_test)
+
+# 4. Production deployment confidence
+beta_confidence_analysis(alpha=successes, beta_param=failures)
 ```
 
 ### **Conformal Prediction Optimization**
