@@ -1,10 +1,157 @@
 # Visualization Module (`plot`)
 
-The `plot` module provides comprehensive visualization tools for exploratory data analysis, correlation analysis, and time series diagnostics. Built on Plotly for interactive, publication-ready visualizations that support both statistical analysis and MLOps monitoring workflows.
+The `plot` module provides comprehensive visualization tools for exploratory data analysis, correlation analysis, time series diagnostics, and classification model evaluation. Built on Plotly for interactive, publication-ready visualizations that support both statistical analysis and MLOps monitoring workflows.
 
 ## Features
 
-### 1. Correlation Analysis (`correlation.py`)
+### 1. Classification Model Evaluation (`calibration.py`)
+
+#### **Model Calibration & Reliability**
+
+#### **`reliability_curve`**
+Generates a reliability curve (calibration curve) for binary classifiers, plotting true probability vs predicted probability.
+
+```python
+from tinyshift.plot import reliability_curve
+
+reliability_curve(
+    clf=classifier,
+    X=X_test,
+    y=y_test,
+    model_name="RandomForest",
+    n_bins=15
+)
+```
+
+**Parameters:**
+- `clf`: Trained classifier with predict_proba method
+- `X`: Input feature data for evaluation
+- `y`: True binary labels (0 or 1)
+- `model_name`: Name to display in legend (default: "Model")
+- `n_bins`: Number of bins for the curve (default: 15)
+- `fig_type`: Display renderer (default: None)
+
+**When to use:** 
+- Assess model calibration quality
+- Identify over/under-confident predictions
+- Compare calibration across different models
+
+---
+
+#### **`score_distribution`**
+Displays histogram of predicted probability scores to understand model confidence patterns.
+
+```python
+from tinyshift.plot import score_distribution
+
+score_distribution(
+    clf=classifier,
+    X=X_test,
+    nbins=20
+)
+```
+
+**Parameters:**
+- `clf`: Trained classifier with predict_proba method
+- `X`: Input feature data
+- `nbins`: Number of histogram bins (default: 15)
+- `fig_type`: Display renderer (default: None)
+
+**When to use:**
+- Analyze distribution of model confidence
+- Identify calibration issues (e.g., overconfidence)
+- Understand prediction patterns
+
+---
+
+#### **Classification Performance**
+
+#### **`confusion_matrix`**
+Interactive confusion matrix heatmap with percentage annotations for binary classification.
+
+```python
+from tinyshift.plot import confusion_matrix
+
+confusion_matrix(
+    clf=classifier,
+    X=X_test,
+    y=y_test,
+    percentage_by_class=True
+)
+```
+
+**Parameters:**
+- `clf`: Trained classifier with predict method
+- `X`: Input feature data
+- `y`: True binary labels
+- `fig_type`: Display renderer (default: None)
+- `percentage_by_class`: Show percentages by class vs overall (default: True)
+
+**When to use:**
+- Evaluate classification performance
+- Identify class-specific errors
+- Compare FP/FN trade-offs
+
+---
+
+#### **Conformal Prediction**
+
+#### **`efficiency_curve`**
+Visualizes efficiency and validity trade-off for conformal prediction classifiers across different error rates.
+
+```python
+from tinyshift.plot import efficiency_curve
+
+efficiency_curve(
+    clf=conformal_classifier,
+    X=X_test,
+    width=800,
+    height=400
+)
+```
+
+**Parameters:**
+- `clf`: Conformal classifier with predict_set method
+- `X`: Input feature data
+- `fig_type`: Display renderer (default: None)
+- `width`: Figure width in pixels (default: 800)
+- `height`: Figure height in pixels (default: 400)
+
+**When to use:**
+- Assess conformal predictor calibration
+- Optimize efficiency vs validity trade-off
+- Validate coverage guarantees
+
+---
+
+#### **Statistical Distributions**
+
+#### **`beta_pdf_with_cdf_fill`**
+Plots Beta distribution PDF with filled area, useful for Bayesian analysis and calibration studies.
+
+```python
+from tinyshift.plot import beta_pdf_with_cdf_fill
+
+beta_pdf_with_cdf_fill(
+    alpha=2,
+    beta_param=5,
+    fig_type=None
+)
+```
+
+**Parameters:**
+- `alpha`: Alpha (α) parameter of Beta distribution (must be positive)
+- `beta_param`: Beta (β) parameter of Beta distribution (must be positive)
+- `fig_type`: Display renderer (default: None)
+
+**When to use:**
+- Visualize prior/posterior distributions in Bayesian analysis
+- Understand Beta distribution shapes for different parameters
+- Educational purposes for probability distributions
+
+---
+
+### 2. Correlation Analysis (`correlation.py`)
 
 #### **`corr_heatmap`**
 Generates an interactive correlation heatmap with diverging color scale and automatic feature handling.
@@ -30,7 +177,7 @@ corr_heatmap(X, width=800, height=600)
 
 ---
 
-### 2. Time Series Diagnostics (`diagnostic.py`)
+### 3. Time Series Diagnostics (`diagnostic.py`)
 
 #### **`seasonal_decompose`**
 Performs MSTL (Multiple Seasonal-Trend decomposition using Loess) with trend significance testing and residual analysis.
@@ -160,6 +307,18 @@ pami(
 
 ## Function Comparison Matrix
 
+### Binary Classification Model Evaluation
+
+| Function | Purpose | Input Type | Key Output | Best Use Case |
+|----------|---------|------------|------------|---------------|
+| **`reliability_curve`** | Model calibration assessment | Classifier + test data | Calibration curve | Evaluate prediction confidence accuracy |
+| **`score_distribution`** | Confidence pattern analysis | Classifier + features | Score histogram | Identify over/underconfident predictions |
+| **`confusion_matrix`** | Classification performance | Classifier + test data | Interactive heatmap | Analyze class-specific errors |
+| **`efficiency_curve`** | Conformal prediction trade-offs | Conformal classifier | Efficiency vs validity | Optimize prediction set performance |
+| **`beta_confidence_analysis`** | Distribution visualization | Alpha/beta parameters | PDF plot | Bayesian analysis, calibration theory |
+
+### Time Series & Correlation Analysis
+
 | Function | Purpose | Input Type | Key Output | Best Use Case |
 |----------|---------|------------|------------|---------------|
 | **`corr_heatmap`** | Correlation visualization | Tabular data | Interactive heatmap | Feature selection, multicollinearity detection |
@@ -172,26 +331,57 @@ pami(
 
 ## Integration with TinyShift Workflow
 
+### **Classification Model Validation**
+```python
+# 1. Model calibration assessment
+reliability_curve(clf, X_test, y_test, model_name="XGBoost")
+
+# 2. Prediction confidence analysis
+score_distribution(clf, X_test)
+
+# 3. Performance evaluation
+confusion_matrix(clf, X_test, y_test)
+```
+
+### **Conformal Prediction Optimization**
+```python
+# 4. Efficiency-validity trade-off analysis
+efficiency_curve(conformal_clf, X_test)
+```
+
 ### **Data Quality Assessment**
 ```python
-# 1. Correlation analysis for feature engineering
+# 5. Correlation analysis for feature engineering
 corr_heatmap(X_features)
 
-# 2. Stationarity check before drift detection
+# 6. Stationarity check before drift detection
 stationarity_analysis(target_series)
 ```
 
 ### **Model Validation**
 ```python
-# 3. Residual diagnostics after model fitting
+# 7. Residual diagnostics after model fitting
 residual_analysis(model.residuals_)
 
-# 4. Seasonal validation for time series models
+# 8. Seasonal validation for time series models
 seasonal_decompose(y_true - y_pred, periods=[7, 30])
 ```
 
 ### **Advanced Pattern Detection**
 ```python
-# 5. Nonlinear autocorrelation analysis
+# 9. Nonlinear autocorrelation analysis
 pami(feature_series, max_lag=48)
 ```
+
+---
+
+## Summary: Classification Function Quick Reference
+
+### Model Calibration & Performance
+| Metric/Function | Input Required | Output | Question You Want to Answer |
+|----------------|----------------|--------|----------------------------|
+| **`reliability_curve`** | Classifier + X + y | Calibration curve | "Are my model's confidence scores accurate?" |
+| **`score_distribution`** | Classifier + X | Score histogram | "How confident is my model in its predictions?" |
+| **`confusion_matrix`** | Classifier + X + y | Performance heatmap | "What types of errors is my model making?" |
+| **`efficiency_curve`** | Conformal classifier + X | Efficiency vs validity | "How efficient are my prediction sets?" |
+| **`beta_confidence_analysis`** | Alpha + beta parameters | PDF visualization | "How confident can I be putting this model in production?" |
