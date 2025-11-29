@@ -40,7 +40,7 @@ def chebyshev_guaranteed_percentage(
 
     X = np.asarray(X)
     mu = np.mean(X)
-    std = np.std(X)
+    std = np.std(X, ddof=1)
     lower, upper = interval
     k_values = []
     if lower is not None:
