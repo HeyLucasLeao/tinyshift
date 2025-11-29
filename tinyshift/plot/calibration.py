@@ -8,8 +8,10 @@ import plotly.graph_objects as go
 from sklearn.calibration import calibration_curve
 from scipy.stats import beta
 from sklearn import metrics
+from sklearn.metrics import brier_score_loss
 import plotly.figure_factory as ff
 import plotly.express as px
+import plotly.subplots as sp
 from sklearn.base import ClassifierMixin
 from typing import List
 
@@ -138,18 +140,21 @@ def reliability_curve(
     model_name: str = "Model",
     n_bins=15,
     fig_type=None,
+    width=600,
+    height=800,
 ) -> go.Figure:
     """
-    Generates a reliability curve (calibration curve) for a binary classifier.
+    Generates a reliability curve (calibration curve) for a binary classifier with calibration metrics summary.
 
     The reliability curve plots the true probability of the positive class against
     the mean predicted probability in each bin. A perfectly calibrated classifier
-    would follow the diagonal line.
+    would follow the diagonal line. The function also displays calibration metrics
+    including Brier Score, Mean Calibration Error, and Maximum Calibration Error.
 
     Parameters
     -----------
     clf : ClassifierMixin
-        The trained classifier model that implements predict_proba.
+        The trained classifier model that implements predict_proba method.
     X : np.ndarray
         Input feature data for evaluation.
     y : np.ndarray
@@ -158,20 +163,38 @@ def reliability_curve(
         Name to display in the legend (default: "Model").
     n_bins : int, optional
         Number of bins for the reliability curve (default: 15).
+        Must be at least 2.
     fig_type : str, optional
-        Renderer for fig.show() (e.g., 'png', 'svg', 'browser').
-        Defaults to None.
+        Display type for the figure (particularly useful in Jupyter notebooks).
+        Common options: None (default), 'png', 'svg', 'browser', or other
+        Plotly-supported renderers. (default: None)
+    width : int, optional
+        Figure width in pixels (default: 600).
+    height : int, optional
+        Figure height in pixels (default: 800).
 
     Returns
     --------
     None
-        Displays the reliability curve plot directly.
+        Displays the reliability curve plot with calibration metrics summary directly.
 
     Notes
     ------
     - Uses quantile strategy for binning to ensure equal-sized bins
     - The diagonal line represents perfect calibration
     - Deviations from the diagonal indicate miscalibration
+    - **Brier Score**: Measures the mean squared difference between predicted
+      probabilities and actual outcomes (lower is better, ranges 0-1)
+    - **Mean Calibration Error**: Average absolute difference between predicted
+      and true probabilities across bins
+    - **Max Calibration Error**: Maximum absolute difference between predicted
+      and true probabilities across bins
+
+    Raises
+    ------
+    ValueError
+        If classifier doesn't implement predict_proba method, if not binary
+        classification, or if n_bins < 2.
     """
 
     if not hasattr(clf, "predict_proba"):
@@ -187,10 +210,26 @@ def reliability_curve(
         y, y_prob, n_bins=n_bins, strategy="quantile"
     )
 
-    fig = go.Figure()
+    brier_score = brier_score_loss(y, y_prob)
+    calibration_error = np.mean(np.abs(v_prob_true - v_prob_pred))
+    max_calibration_error = np.max(np.abs(v_prob_true - v_prob_pred))
+
+    fig = sp.make_subplots(
+        rows=2,
+        cols=1,
+        subplot_titles=["Reliability Curve", "Calibration Summary"],
+    )
 
     fig.add_trace(
-        go.Scatter(x=v_prob_pred, y=v_prob_true, mode="lines+markers", name=model_name)
+        go.Scatter(
+            x=v_prob_pred,
+            y=v_prob_true,
+            mode="lines+markers",
+            name=model_name,
+            line=dict(color="#1f77b4"),
+        ),
+        row=1,
+        col=1,
     )
 
     fig.add_trace(
@@ -200,15 +239,45 @@ def reliability_curve(
             mode="lines",
             name="Perfectly calibrated",
             line=dict(dash="dash", color="grey"),
-        )
+        ),
+        row=1,
+        col=1,
     )
 
+    fig.update_xaxes(title_text="Mean predicted probability", row=1, col=1)
+    fig.update_yaxes(title_text="Fraction of positives", row=1, col=1)
+
+    summary_text = "<br>".join(
+        [
+            f"<b>Brier Score</b>: {brier_score:.4f}",
+            f"<b>Mean Cal. Error</b>: {calibration_error:.4f}",
+            f"<b>Max Cal. Error</b>: {max_calibration_error:.4f}",
+        ]
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=[0],
+            y=[0],
+            text=[summary_text],
+            mode="text",
+            showlegend=False,
+            textfont=dict(size=12),
+            hoverinfo="skip",
+            name="Summary",
+        ),
+        row=2,
+        col=1,
+    )
+
+    fig.update_xaxes(visible=False, row=2, col=1)
+    fig.update_yaxes(visible=False, row=2, col=1)
+
     fig.update_layout(
-        title="Reliability Curve",
-        xaxis_title="Mean predicted probability",
-        yaxis_title="Fraction of positives",
-        legend_title="Model",
-        autosize=False,
+        title="Reliability Curve with Calibration Metrics",
+        width=width,
+        height=height,
+        showlegend=True,
     )
 
     return fig.show(fig_type)
