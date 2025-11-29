@@ -77,15 +77,17 @@ def adi_cv(
 
     Parameters
     ----------
-    X : array-like, shape (n_samples,)
+    X : Union[np.ndarray, List[float]]
         Time series data (e.g., demand, sales, or other metrics).
 
     Returns
     -------
-    adi : float
-        Average Demand Interval for the time series.
-    cv : float
-        Squared Coefficient of Variation for the time series.
+    Tuple[float, float]
+        A tuple containing:
+        - adi : float
+            Average Demand Interval for the time series.
+        - cv : float
+            Squared Coefficient of Variation for the time series.
 
     Notes
     -----
@@ -100,6 +102,11 @@ def adi_cv(
         * "Intermittent":High ADI, Low CV — infrequent but regular activity, forecastable with specialized methods (e.g., Croston's, ADIDA, IMAPA).
         * "Erratic":     Low ADI, High CV — regular activity but high variability, high uncertainty.
         * "Lumpy":       High ADI, High CV — periods of inactivity followed by bursts, challenging to forecast.
+
+    Raises
+    ------
+    ValueError
+        If input data is not 1-dimensional.
     """
     X = np.asarray(X, dtype=np.float64)
 
@@ -109,7 +116,7 @@ def adi_cv(
     n = X.shape[0]
     n_nonzero = np.count_nonzero(X)
     adi = n / n_nonzero
-    cv = (np.std(X) / np.mean(X)) ** 2
+    cv = (np.std(X, ddof=1) / np.mean(X)) ** 2
 
     return adi, cv
 
