@@ -325,6 +325,8 @@ def assess_comparability(
             feature for feature in features if feature not in df.columns
         ]
         raise ValueError(f"Features not found in DataFrame columns: {missing_features}")
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("Input data must be a pandas DataFrame.")
 
     if isinstance(features, str):
         features = [features]
