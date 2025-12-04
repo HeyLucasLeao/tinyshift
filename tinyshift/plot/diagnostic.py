@@ -668,3 +668,126 @@ def pami(
         width=width,
     )
     return fig.show(fig_type)
+
+
+def confidence_intervals(
+    df: pd.DataFrame,
+    feature: str,
+    group_col: str,
+    confidence: float = 0.95,
+    fig_type: Optional[str] = None,
+    height: int = 500,
+    width: int = 700,
+) -> go.Figure:
+    """
+    Calculates and plots the confidence interval for the mean of a feature,
+    grouped by a categorical column, using the Student's t-distribution.
+
+    This function creates an interactive scatter plot with error bars showing the mean
+    values and confidence intervals for a numerical feature across different groups.
+    The confidence intervals are calculated using the Student's t-distribution, which
+    is appropriate for small sample sizes and when the population standard deviation
+    is unknown.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame containing the data to analyze.
+    feature : str
+        The name of the numerical column for which to calculate the mean and
+        confidence interval. Must be a column name that exists in the DataFrame.
+    group_col : str
+        The name of the categorical column to group by. Must be a column name
+        that exists in the DataFrame.
+    confidence : float, default=0.95
+        The desired confidence level (between 0 and 1). Common values are 0.90,
+        0.95, and 0.99. Default is 0.95 (95% confidence interval).
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        A Plotly Figure object displaying the means and their confidence intervals
+        as a scatter plot with error bars. The plot includes hover information
+        showing the exact confidence interval bounds.
+
+    Raises
+    ------
+    ValueError
+        If confidence level is not between 0 and 1.
+    KeyError
+        If feature or group_col columns do not exist in the DataFrame.
+    """
+    if not (0 < confidence < 1):
+        raise ValueError("Confidence level must be between 0 and 1.")
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("Input data must be a pandas DataFrame.")
+    if feature not in df.columns:
+        raise KeyError(f"Feature column '{feature}' not found in DataFrame.")
+    if group_col not in df.columns:
+        raise KeyError(f"Group column '{group_col}' not found in DataFrame.")
+
+    def t_confidence_interval(
+        data: np.ndarray,
+        confidence: float = 0.95,
+    ) -> tuple:
+        """
+        Calculates the confidence interval (lower, upper) for the mean
+        using the Student's t-distribution.
+        """
+
+        if isinstance(data, pd.Series):
+            data = data.to_numpy()
+
+        if len(data) < 2:
+            return (np.nan, np.nan)
+
+        return scipy.stats.t.interval(
+            confidence, len(data) - 1, loc=np.mean(data), scale=scipy.stats.sem(data)
+        )
+
+    stats = df.groupby(group_col)[feature].agg(["mean"]).reset_index()
+
+    intervals = df.groupby(group_col)[feature].apply(
+        t_confidence_interval, confidence=confidence
+    )
+    intervals_df = intervals.apply(pd.Series).rename(
+        columns={0: "ci_lower", 1: "ci_upper"}
+    )
+    intervals_df = intervals_df.reset_index()
+
+    plot_data = pd.merge(stats, intervals_df, on=group_col)
+
+    plot_data["error_minus"] = plot_data["mean"] - plot_data["ci_lower"]
+    plot_data["error_plus"] = plot_data["ci_upper"] - plot_data["mean"]
+
+    fig = px.scatter(
+        plot_data,
+        x=group_col,
+        y="mean",
+        error_y="error_plus",
+        error_y_minus="error_minus",
+        title=f"Mean and {int(confidence*100)}% Confidence Interval of {feature} by {group_col}",
+        labels={"mean": f"Mean of {feature}", group_col: group_col},
+    )
+
+    fig.update_traces(
+        marker_color="#2E86AB",
+        name="Mean",
+        hovertemplate=f"<b>{group_col}:</b> %{{x}}<br><b>Mean:</b> %{{y:.2f}}<br><b>CI:</b> [%{{customdata[0]:.2f}}, %{{customdata[1]:.2f}}] <extra></extra>",
+        customdata=plot_data[["ci_lower", "ci_upper"]].values,
+    )
+
+    fig.update_layout(
+        title_x=0.5,
+        xaxis=dict(
+            title_font=dict(size=14), tickfont=dict(size=12), gridcolor="lightgray"
+        ),
+        yaxis=dict(
+            title_font=dict(size=14), tickfont=dict(size=12), gridcolor="lightgray"
+        ),
+        hovermode="x unified",
+        height=height,
+        width=width,
+    )
+
+    return fig.show(fig_type)
